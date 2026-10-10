@@ -3,7 +3,8 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from agents import Agent, ModelSettings, RunConfig, Runner, SQLiteSession
+from agents import Agent, ModelSettings, OpenAIResponsesModel, RunConfig, Runner, SQLiteSession
+from openai import AsyncOpenAI
 from pydantic import BaseModel
 
 ROOT = Path(__file__).resolve().parent
@@ -67,40 +68,29 @@ def validate_reply(reply: TutorReply):
     return reply
 
 
-async def run_turn(agent, text: str, session):
-    # Roll back session if API/schema/output validation fails, so retry is clean.
-    previous = await session.get_items()
-    try:
-        result = await Runner.run(
-            agent, text, session=session, max_turns=3,
-            run_config=RunConfig(tracing_disabled=True),
-        )
-        reply = validate_reply(result.final_output)
-        return reply, {
-            'stage': reply.stage,
-            'new_item_types': [getattr(item, 'type', type(item).__name__)
-                               for item in result.new_items],
-            'teacher_review_needed': reply.teacher_review.needed,
-        }
-    except Exception:
-        await session.clear_session()
-        if previous:
-            await session.add_items(previous)
-        raise
+class EventLoopClosedError(RuntimeError):
+    """Safe diagnostic name; never contains provider messages or credentials."""
 
 
-def reply_to_markdown(reply: TutorReply) -> str:
-    parts = [f'**현재 단계: {reply.stage}**',
-             '**학생 생각 분석**\n' + reply.analysis,
-             '**학습 도움**\n' + reply.support.explanation]
-    for card in reply.support.candidates:
-        parts.append(
-            f'### 가상 사례 {card.id} · {card.title}\n{card.situation}\n\n'
-            f'- 연결 개념: {", ".join(card.concepts)}\n'
-            f'- 추가 확인: {", ".join(card.missing_information)}\n'
-            f'- 탐구 관점: {card.inquiry_focus}'
-        )
-    parts.append('**다음 학생 행동**\n' + reply.next_action)
-    label = '교사 확인 필요' if reply.teacher_review.needed else '현재 검토 요청 없음'
-    parts.append(f'**교사 확인: {label}**\n{reply.teacher_review.reason}')
-    return '\n\n'.join(parts)
+class EventLoopMismatchError(RuntimeError):
+    """Safe diagnostic for resources belonging to another event loop."""
+
+
+class SessionRecoveryError(RuntimeError):
+    """Session rollback failed; start a fresh learning session."""
+
+
+def classify_runtime_error(exc):
+    """Inspect locally, expose only fixed diagnostic names, never raw text."""
+    current = exc
+    seen = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, RuntimeError):
+            message = str(current).lower()
+            if 'event loop is closed' in message:
+                return EventLoopClosedError()
+            if 'different loop' in message or 'different event loop' in message:
+                return EventLoopMismatchError()
+        current = current.__cause__ or current.__context__
+    return exc
