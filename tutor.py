@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from agents import Agent, ModelSettings, OpenAIResponsesModel, RunConfig, Runner, SQLiteSession
+from agents import Agent, FileSearchTool, ModelSettings, OpenAIResponsesModel, RunConfig, Runner, SQLiteSession
 from openai import AsyncOpenAI
 from pydantic import BaseModel, ValidationError
 
@@ -43,7 +43,7 @@ def new_session():
     return SQLiteSession('health_' + uuid4().hex)
 
 
-def build_agent(model: str, version: str = 'v2'):
+def build_agent(model: str, version: str = 'v2', tools: list = None):
     if version not in ('v1', 'v2'):
         raise ValueError('Instructions version must be v1 or v2')
     return Agent(
@@ -52,7 +52,7 @@ def build_agent(model: str, version: str = 'v2'):
         model=model,
         model_settings=ModelSettings(store=False),
         output_type=TutorReply,
-        tools=[],
+        tools=tools if tools is not None else [],
     )
 
 
