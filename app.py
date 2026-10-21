@@ -165,22 +165,6 @@ with st.sidebar:
     else:
         st.caption("💡 대화 입력 전에도 빈 템플릿으로 저장 가능합니다.")
 
-    # PDF 보고서 다운로드 버튼
-    pdf_report_path = Path("RAG_ON_OFF_비교검증보고서.pdf")
-    if pdf_report_path.exists():
-        try:
-            with open(pdf_report_path, "rb") as f_pdf:
-                st.download_button(
-                    label="📑 5주차 종합 보고서 (PDF) 저장",
-                    data=f_pdf.read(),
-                    file_name="HealthCoach_W5_RAG_ON_OFF_비교검증보고서.pdf",
-                    mime="application/pdf",
-                    key="sidebar_pdf_btn",
-                    use_container_width=True,
-                    help="5주차 T1~T5 검증 결과 및 환각 억제 분석이 포함된 A4 인쇄용 PDF 보고서를 내려받습니다."
-                )
-        except Exception:
-            pass
 
     st.markdown("---")
 
@@ -224,32 +208,12 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-status_badge = "🟢 **RAG ON** (FileSearchTool 연결됨)" if is_rag_on else "⚪ **RAG OFF** (순수 LLM 지식만 사용)"
-st.caption(f"동작 모드: {status_badge} · 특성화고 2학년 보건간호 Med-Inquiry & Case Tutor")
+status_badge = "🟢 <b>RAG ON</b> (FileSearchTool 연결됨)" if is_rag_on else "⚪ <b>RAG OFF</b> (순수 LLM 지식만 사용)"
+st.markdown(
+    f'<div class="notranslate" translate="no" style="font-size:0.88rem; color:#94a3b8; margin-bottom:12px;">동작 모드: {status_badge} · 특성화고 2학년 보건간호 가상사례 실습 및 지침 튜터</div>',
+    unsafe_allow_html=True
+)
 
-# 5주차 종합 비교 검증 보고서 전문 열람 및 PDF 다운로드 익스팬더
-report_md_path = Path("RAG_ON_OFF_비교검증보고서.md")
-if report_md_path.exists():
-    with st.expander("📑 5주차 RAG ON vs OFF 종합 비교 검증 보고서 전문 열람 (PDF 다운로드)", expanded=False):
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.info("💡 아래 전문을 읽어보시거나 우측 버튼을 통해 A4 고품질 인쇄용 PDF 보고서를 바로 다운로드할 수 있습니다.")
-        with c2:
-            if pdf_report_path.exists():
-                try:
-                    with open(pdf_report_path, "rb") as f_pdf2:
-                        st.download_button(
-                            label="📥 PDF 보고서 받기",
-                            data=f_pdf2.read(),
-                            file_name="HealthCoach_W5_RAG_ON_OFF_비교검증보고서.pdf",
-                            mime="application/pdf",
-                            key="main_pdf_download_btn",
-                            use_container_width=True
-                        )
-                except Exception:
-                    pass
-        st.markdown(report_md_path.read_text(encoding="utf-8"))
-        st.markdown("---")
 
 # 대화 기록 표시
 for message in st.session_state.messages:
