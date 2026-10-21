@@ -50,7 +50,7 @@ def build_agent(model: str, version: str = 'v2', tools: list = None):
         name='Med-Inquiry & Case Tutor',
         instructions=(ROOT / f'instructions_{version}.txt').read_text(encoding='utf-8'),
         model=model,
-        model_settings=ModelSettings(store=False),
+        model_settings=ModelSettings(store=True),
         output_type=TutorReply,
         tools=tools if tools is not None else [],
     )
