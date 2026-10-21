@@ -1,2 +1,5 @@
-openai-agents==0.23.1
+﻿openai-agents==0.23.1
 streamlit==1.65.0
+openai
+requests
+beautifulsoup4
