@@ -8,8 +8,8 @@
 | 항목 (Item) | 내용 (Description) |
 | :--- | :--- |
 | **연구 과제명** | 특성화고 2학년 보건간호 실습 지도를 위한 RAG 기반 AI 보건튜터 효과성 및 안전성 검증 |
-| **제출 대상** | 대학원 교육학/보건의료교육 담당 지도교수 제출용 |
-| **연구 대상 시스템** | Med-Inquiry & Case Tutor (Streamlit: `health-tutor-week5-20261010.streamlit.app`) |
+| **제출자** | 숙명여자대학교 AI융합교육대학원 2541822 백기진, 2540092 김이슬 |
+| **연구 대상 시스템** | Healthcare-nquiry & Case Tutor (Streamlit: `health-tutor-week5-20261010.streamlit.app`) |
 | **기본 언어모델** | `gpt-4.1-mini` (OpenAI LLM Engine) |
 | **교수안 지침 체계** | `instructions_v2.txt` (Sha256 Hash: `84f2d4121674`) |
 | **RAG 지식 베이스** | OpenAI Vector Store (`vs_6ad59e8eae9081919a57db129940e045`) |
@@ -315,4 +315,4 @@
    - 본 실증 결과를 바탕으로, 직업계고 보건간호과 교과 수업 및 가상 모의실습 수업에 RAG 기반 AI 보건튜터를 본격 도입할 경우, 학생의 자기주도적 문제해결력 향상과 함께 교사의 개별화된 지도 부담을 획기적으로 경감할 수 있을 것으로 기대됩니다.
 
 ---
-*본 보고서는 Med-Inquiry & Case Tutor 지식 에이전트 자동화 검증 프레임워크에 의해 생성되었으며, 첨부된 10종의 원본 JSON 세션 로그(AITutor_T1~T5_ON/OFF)와 100% 일치함을 보증합니다.*
+*본 보고서는 Healthcare-nquiry & Case Tutor 지식 에이전트 자동화 검증 프레임워크에 의해 생성되었으며, 첨부된 10종의 원본 JSON 세션 로그(AITutor_T1~T5_ON/OFF)와 100% 일치함을 보증합니다.*

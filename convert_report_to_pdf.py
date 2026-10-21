@@ -207,7 +207,7 @@ def markdown_to_academic_html(md_text: str) -> str:
       color: #64748b;
     }}
     @top-right {{
-      content: "Med-Inquiry AI 보건튜터 RAG 실증 보고서";
+      content: "Healthcare-nquiry AI 보건튜터 RAG 실증 보고서";
       font-size: 7.5pt;
       font-family: 'Pretendard', sans-serif;
       color: #94a3b8;
