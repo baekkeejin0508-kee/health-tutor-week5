@@ -87,7 +87,7 @@ with st.sidebar:
         "RAG 동작 모드",
         ["🟢 RAG ON (Knowledge 검색)", "⚪ RAG OFF (순수 LLM)"],
         index=0,
-        help="5주차 교수안 지침(instructions_v2.txt)에 RAG 검색 연결 여부를 전환합니다."
+        help="교수안 지침(instructions_v2.txt)에 RAG 검색 연결 여부를 전환합니다."
     )
     is_rag_on = "RAG ON" in rag_mode
 
@@ -137,7 +137,7 @@ with st.sidebar:
         instructions_text = Path(f"instructions_{version}.txt").read_text(encoding="utf-8") if Path(f"instructions_{version}.txt").exists() else ""
         instructions_hash = hashlib.sha256(instructions_text.strip().encode("utf-8")).hexdigest()[:12]
         record_payload = {
-            "notice": "특성화고 2학년 보건간호 5주차 RAG 지식 에이전트 테스트 기록",
+            "notice": "특성화고 2학년 보건간호 AI 보건튜터 테스트 기록",
             "test_id": test_id,
             "mode": f"RAG_{current_mode}",
             "model": model,
@@ -273,12 +273,12 @@ if user_input:
 
 if st.session_state.messages or st.session_state.events:
     st.markdown("---")
-    st.subheader("📋 5주차 학습 및 대화 기록 다운로드")
+    st.subheader("📋 학습 및 대화 기록 다운로드")
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         export_5w = {
             "notice": "가상 학습 기록. 교사에게 자동 전송되지 않음.",
-            "mode": "RAG_ON" if is_rag_on else "RAG_OFF (5주차 순수 LLM)",
+            "mode": "RAG_ON" if is_rag_on else "RAG_OFF (순수 LLM)",
             "instructions": version,
             "messages": st.session_state.messages,
             "events": st.session_state.events
@@ -299,5 +299,5 @@ if st.session_state.messages or st.session_state.events:
             mime="text/plain",
             use_container_width=True
         )
-    with st.expander("🔍 관찰 및 내부 이벤트 기록 (5주차 검토용)"):
+    with st.expander("🔍 관찰 및 내부 이벤트 기록 (교사 검토용)"):
         st.json(st.session_state.events)
