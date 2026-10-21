@@ -1,7 +1,21 @@
-﻿.streamlit/secrets.toml
+﻿# Streamlit secrets & Environment variables (API Key 보호)
+.streamlit/secrets.toml
+.env
+
+# Python Cache & Database
 __pycache__/
 *.pyc
+*.pyo
 *.db
+*.db-*
 *.db-shm
 *.db-wal
-.env
+
+# RAG 원본 문서 보호 (교과서 PDF, HWP, 크롤링 웹문서의 Git 유출 방지)
+knowledge/
+knowledge_web/
+*.hwp
+
+# OS
+.DS_Store
+Thumbs.db
