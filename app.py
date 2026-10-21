@@ -82,7 +82,15 @@ with st.sidebar:
     )
     st.markdown("---")
 
-    st.subheader("🧪 비교 실험 모드 (RAG On vs OFF)")
+    st.markdown(
+        """
+        <div class="notranslate" translate="no">
+            <h3 style="margin-top: 15px; margin-bottom: 2px; font-size: 1.15rem; font-weight: 600;">🧪 비교 실험 모드</h3>
+            <div style="font-size: 0.88rem; color: #94a3b8; margin-bottom: 12px; font-weight: 500;">(RAG ON vs OFF)</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     rag_mode = st.radio(
         "RAG 동작 모드",
         ["🟢 RAG ON (Knowledge 검색)", "⚪ RAG OFF (순수 LLM)"],
@@ -112,7 +120,7 @@ with st.sidebar:
     st.subheader("💾 테스트 기록 다운로드")
     test_id = st.selectbox("테스트 항목 선택", ["T1", "T2", "T3", "T4", "T5"], index=0)
     current_mode = "ON" if is_rag_on else "OFF"
-    download_filename = f"HealthCoach_W5-{test_id}_{current_mode}.json"
+    download_filename = f"AITutor_{test_id}_{current_mode}.json"
     local_saved_file = Path(download_filename)
 
     messages_list = st.session_state.get("messages", [])
