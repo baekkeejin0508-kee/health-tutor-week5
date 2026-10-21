@@ -19,7 +19,7 @@ if sys.platform == "win32":
         pass
 
 st.set_page_config(
-    page_title="AI 보건튜터 5주차 - RAG 검증",
+    page_title="AI 보건튜터",
     page_icon="📘",
     layout="wide"
 )
@@ -74,8 +74,8 @@ with st.sidebar:
     st.markdown(
         """
         <div class="notranslate" translate="no">
-            <h2 style="margin: 0; padding: 0; font-size: 1.25rem; font-weight: 700; white-space: nowrap;">📘 AI 보건튜터 (5주차 RAG)</h2>
-            <div style="font-size: 0.82rem; color: #94a3b8; margin-top: 4px; margin-bottom: 12px;">특성화고 2학년 · Med-Inquiry Tutor</div>
+            <h2 style="margin: 0; padding: 0; font-size: 1.25rem; font-weight: 700; white-space: nowrap;">📘 AI 보건튜터</h2>
+            <div style="font-size: 0.82rem; color: #94a3b8; margin-top: 4px; margin-bottom: 12px;">특성화고 2학년 · 단원 개념부터 모의실습까지</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -218,7 +218,7 @@ with st.sidebar:
 st.markdown(
     """
     <div class="notranslate" translate="no">
-        <h1 style="margin: 0; padding: 0; font-size: 2.1rem; font-weight: 700;">📘 AI 보건튜터 (5주차)</h1>
+        <h1 style="margin: 0; padding: 0; font-size: 2.1rem; font-weight: 700;">📘 AI 보건튜터</h1>
     </div>
     """,
     unsafe_allow_html=True
@@ -306,3 +306,34 @@ if user_input:
                     st.rerun()
                 except Exception as exc:
                     st.error(f"응답 생성 중 오류가 발생했습니다: {exc}")
+
+if st.session_state.messages or st.session_state.events:
+    st.markdown("---")
+    st.subheader("📋 5주차 학습 및 대화 기록 다운로드")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        export_5w = {
+            "notice": "가상 학습 기록. 교사에게 자동 전송되지 않음.",
+            "mode": "RAG_ON" if is_rag_on else "RAG_OFF (5주차 순수 LLM)",
+            "instructions": version,
+            "messages": st.session_state.messages,
+            "events": st.session_state.events
+        }
+        st.download_button(
+            label="📥 교사 검토 및 학습 기록 (JSON)",
+            data=json.dumps(export_5w, ensure_ascii=False, indent=2),
+            file_name=f"health_tutor_record_{version}.json",
+            mime="application/json",
+            use_container_width=True
+        )
+    with col_d2:
+        transcript_5w = "\n\n".join(f"{m['role']}\n{m['content']}" for m in st.session_state.messages)
+        st.download_button(
+            label="📄 대화 전체 기록 (TXT)",
+            data=transcript_5w,
+            file_name=f"health_tutor_record_{version}.txt",
+            mime="text/plain",
+            use_container_width=True
+        )
+    with st.expander("🔍 관찰 및 내부 이벤트 기록 (5주차 검토용)"):
+        st.json(st.session_state.events)
