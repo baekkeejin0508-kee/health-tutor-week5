@@ -1,4 +1,4 @@
-﻿# Streamlit secrets & Environment variables (API Key 보호)
+# Streamlit secrets & Environment variables (API Key 보호)
 .streamlit/secrets.toml
 .env
 
@@ -14,6 +14,11 @@ __pycache__/
 # RAG 원본 문서 보호 (교과서 PDF, HWP, 크롤링 웹문서의 Git 유출 방지)
 knowledge/
 knowledge_web/
+*.hwp
+
+# 개인정보(성명 및 학번) 보호: 연구보고서 파일 일체 Git 추적 제외
+*보고서*
+*.docx
 *.hwp
 
 # OS
