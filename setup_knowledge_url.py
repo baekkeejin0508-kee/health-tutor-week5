@@ -23,17 +23,25 @@ if sys.stderr:
         pass
 
 # -------------------------------------------------------------
-# 1. 수집할 웹페이지 URL 목록 (보건/간호/교육 전문 공공 지식)
+# 1. 수집할 웹페이지 URL 목록 (보건/간호/교육 전문 공공 지식 + 질환별 임상 가이드라인)
 # -------------------------------------------------------------
 URLS = [
-    # 유네스코 AI 교사 역량 프레임워크 (교수님 공통 지침 URL)
+    # [교육/역량] 유네스코 AI 교사 역량 프레임워크 (교수님 공통 지침 URL)
     "https://www.unesco.org/en/articles/ai-competency-framework-teachers",
-    # 비뇨계 (배뇨 생리, 신장 및 방광 질환, 빈뇨/다뇨)
+    # [인체생리] 비뇨계 (배뇨 생리, 신장 및 방광 질환, 빈뇨/다뇨)
     "https://ko.wikipedia.org/wiki/%EB%B9%84%EB%87%A8%EA%B3%84",
-    # 간호 (기본간호 및 사정, 환자 안전)
+    # [간호원론] 간호 (기본간호 및 사정, 환자 안전)
     "https://ko.wikipedia.org/wiki/%EA%B0%84%ED%98%B8",
-    # 응급처치 (학교보건 및 일상 응급상황 대처)
+    # [응급대처] 응급처치 (학교보건 및 일상 응급상황 대처)
     "https://ko.wikipedia.org/wiki/%EC%9D%91%EA%B8%89%EC%B2%98%EC%B9%98",
+    # [국가공인 임상 가이드라인] 질병관리청 국가건강정보포털 - 연조직염(봉와직염)
+    "https://health.kdca.go.kr/healthinfo/biz/health/gnrlzHealthInfo/gnrlzHealthInfo/gnrlzHealthInfoView.do?cntnts_sn=5238",
+    # [상급종합병원 질환백과] 서울아산병원 질환백과 - 봉와직염(Cellulitis)
+    "https://www.amc.seoul.kr/asan/healthinfo/disease/diseaseDetail.do?contentId=31537",
+    # [상급종합병원 의학정보] 서울대학교병원 N의학정보 - 봉와직염(Cellulitis)
+    "https://www.snuh.org/health/nMedInfo/nView.do?category=DIS&medid=AA000217",
+    # [의학 백과사전] 위키백과 의학포털 - 연조직염(봉와직염)
+    "https://ko.wikipedia.org/wiki/%EC%97%B0%EC%A1%B0%EC%A7%81%EC%97%BC",
 ]
 
 OUT_DIR = Path("knowledge_web")
@@ -45,8 +53,11 @@ def extract_page(url: str) -> str:
     if parsed.scheme not in ("https", "http") or not parsed.hostname:
         raise ValueError(f"올바른 HTTP(S) URL이 아닙니다: {url}")
 
+    import urllib3
+    urllib3.disable_warnings()
+
     headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) EducationRAGDemo/1.0"}
-    response = requests.get(url, timeout=20, headers=headers)
+    response = requests.get(url, timeout=20, headers=headers, verify=False)
     response.raise_for_status()
 
     content_type = response.headers.get("Content-Type", "").lower()
@@ -54,17 +65,32 @@ def extract_page(url: str) -> str:
         raise ValueError(f"HTML 페이지가 아닙니다 (Content-Type: {content_type}).")
 
     soup = BeautifulSoup(response.text, "html.parser")
-    # 네비게이션, 푸터, 스크립트, 스타일 등 잡음 요소 제거 (교안 표준)
-    for tag in soup(["script", "style", "nav", "footer", "header", "form", "noscript"]):
+    # 네비게이션, 푸터, 스크립트, 스타일 등 잡음 요소 제거
+    for tag in soup(["script", "style", "nav", "footer", "header", "noscript"]):
         tag.decompose()
 
-    root = soup.find("main") or soup.find("article") or soup.find("div", id="content") or soup.body or soup
+    # 전자정부 포털 등은 본문이 <form> 내부에 감싸져 있으므로 decompose 대신 unwrap 처리
+    for form in soup.find_all("form"):
+        form.unwrap()
+
+    # 본문 영역 탐색 우선순위 (질병관리청, 서울아산병원, 서울대병원, 위키백과 등 지원)
+    root = (
+        soup.find("div", class_="data-content")
+        or soup.find("div", id="sub-content")
+        or soup.find("div", class_="contents-wrap")
+        or soup.find("main")
+        or soup.find("article")
+        or soup.find("div", id="content")
+        or soup.find("div", class_="subContent")
+        or soup.body
+        or soup
+    )
     title = soup.title.get_text(" ", strip=True) if soup.title else url
     lines = [x.strip() for x in root.get_text("\n", strip=True).splitlines()]
     body = "\n".join(x for x in lines if x)
 
     if len(body) < 200:
-        raise ValueError("추출된 본문이 너무 짧습니다. 동적 페이지 또는 접근 제한 여부를 확인하세요.")
+        raise ValueError(f"추출된 본문이 너무 짧습니다 ({len(body)}자). 동적 페이지 또는 접근 제한 여부를 확인하세요.")
 
     return f"제목: {title}\n출처 URL: {url}\n\n{body}\n"
 
