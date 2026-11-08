@@ -1,11 +1,11 @@
-"""HEALTH QUEST — 예비 보건의료인의 미션룸: 교육용 UI·UX 렌더링 모듈."""
-import json
+"""HEALTH QUEST — 예비 보건의료인의 미션룸: 직관적 단계별(Step-by-Step) UI·UX 및 활동지 출력 모듈."""
+import html
 import streamlit as st
+import streamlit.components.v1 as components
 from quest_data import SITE_CONFIG, UNIT_CATALOG
 from quest_engine import (
     BADGE_DEFINITIONS,
     award_action_once,
-    build_quest_export_payload,
     evaluate_mission_submission,
     generate_unit_inquiry_feedback,
     get_current_scenario_data,
@@ -16,7 +16,7 @@ from quest_engine import (
 
 
 def inject_quest_css(reduce_motion: bool = False):
-    """아이보리 배경(#FAF8F5), 딥 네이비 본문(#1B2A4A), 청록색 주요 버튼(#0D9488), 코랄 제한 강조(#E05A47) 테마 및 반응형 CSS."""
+    """밝은 아이보리 배경(#FAF8F5), 딥 네이비 본문(#1B2A4A), 청록색 주요 버튼(#0D9488), 코랄 포인트(#E05A47)."""
     motion_css = (
         """
         *, *::before, *::after {
@@ -42,7 +42,6 @@ def inject_quest_css(reduce_motion: bool = False):
     st.markdown(
         f"""
         <style>
-        /* 전체 배경 및 타이포그래피: 밝은 아이보리 배경 + 딥 네이비 본문 (OS 다크모드에서도 강제 라이트 톤 고정) */
         :root {{
             color-scheme: light !important;
         }}
@@ -51,7 +50,6 @@ def inject_quest_css(reduce_motion: bool = False):
             color: #1B2A4A !important;
             overflow-x: hidden !important;
         }}
-        /* 상단 검정 헤더 바 제거 및 밝은 아이보리 통일 */
         header[data-testid="stHeader"] {{
             background-color: #FAF8F5 !important;
             color: #1B2A4A !important;
@@ -59,7 +57,7 @@ def inject_quest_css(reduce_motion: bool = False):
         }}
         .stApp p, .stApp li, .stApp label, .stApp span, .stMarkdown {{
             color: #1B2A4A !important;
-            line-height: 1.6;
+            line-height: 1.65;
             word-break: keep-all;
             overflow-wrap: break-word;
         }}
@@ -67,7 +65,7 @@ def inject_quest_css(reduce_motion: bool = False):
             color: #14223D !important;
             letter-spacing: -0.02em;
         }}
-        /* 모든 입력창(Selectbox, Textarea, TextInput, Form, Expander) 검정 배경 원천 차단 → 흰색 배경 + 딥 네이비 글씨 */
+        /* 모든 입력창 흰색 배경 + 딥 네이비 글씨 고정 */
         div[data-baseweb="select"] > div,
         div[data-baseweb="input"],
         div[data-baseweb="input"] > div,
@@ -77,10 +75,11 @@ def inject_quest_css(reduce_motion: bool = False):
         input[type="text"] {{
             background-color: #FFFFFF !important;
             color: #1B2A4A !important;
-            border: 1px solid #CBD5E1 !important;
-            border-radius: 10px !important;
+            border: 1.5px solid #CBD5E1 !important;
+            border-radius: 12px !important;
             -webkit-text-fill-color: #1B2A4A !important;
             caret-color: #0D9488 !important;
+            font-size: 0.96rem !important;
         }}
         textarea::placeholder,
         input::placeholder {{
@@ -88,7 +87,6 @@ def inject_quest_css(reduce_motion: bool = False):
             -webkit-text-fill-color: #64748B !important;
             opacity: 1 !important;
         }}
-        /* 드롭다운 메뉴 팝오버 리스트도 밝은 흰색 배경으로 고정 */
         ul[data-baseweb="menu"],
         div[data-baseweb="popover"] div,
         li[role="option"] {{
@@ -98,12 +96,12 @@ def inject_quest_css(reduce_motion: bool = False):
         li[role="option"]:hover {{
             background-color: #F0FDFA !important;
         }}
-        /* Form 및 Expander 카드 배경 밝게 고정 */
         [data-testid="stForm"] {{
             background-color: #FFFFFF !important;
-            border: 1px solid #E5E0D5 !important;
-            border-radius: 14px !important;
-            padding: 1.2rem !important;
+            border: 1.5px solid #E5E0D5 !important;
+            border-radius: 16px !important;
+            padding: 1.3rem !important;
+            box-shadow: 0 2px 8px rgba(27, 42, 74, 0.04);
         }}
         [data-testid="stExpander"],
         [data-testid="stExpander"] details,
@@ -111,14 +109,12 @@ def inject_quest_css(reduce_motion: bool = False):
             background-color: #FFFFFF !important;
             color: #1B2A4A !important;
             border-color: #E5E0D5 !important;
-            border-radius: 10px !important;
+            border-radius: 12px !important;
         }}
-        /* 라디오 버튼 동그라미 테두리 및 선택 색상 선명화 */
         div[role="radiogroup"] label > div:first-child {{
             background-color: #FFFFFF !important;
             border: 2px solid #0D9488 !important;
         }}
-        /* 사이드바 톤 조화 */
         section[data-testid="stSidebar"] {{
             background-color: #F2EFE9 !important;
             border-right: 1px solid #E2DDD3;
@@ -132,75 +128,76 @@ def inject_quest_css(reduce_motion: bool = False):
             color: #1B2A4A !important;
             -webkit-text-fill-color: #1B2A4A !important;
         }}
-        /* 주요 행동 버튼: 청록색(#0D9488) 배경 + 흰색 텍스트 (명도 대비 확보) */
+        /* 주요 행동 버튼: 청록색(#0D9488) */
         div.stButton > button[kind="primary"],
-        div.stFormSubmitButton > button[kind="primary"] {{
+        div.stFormSubmitButton > button[kind="primary"],
+        div.stDownloadButton > button {{
             background-color: #0D9488 !important;
             color: #FFFFFF !important;
             border: 1px solid #0F766E !important;
-            border-radius: 10px !important;
-            font-weight: 600 !important;
-            padding: 0.55rem 1.1rem !important;
-            transition: transform 0.16s ease, background-color 0.16s ease, box-shadow 0.16s ease;
+            border-radius: 12px !important;
+            font-weight: 700 !important;
+            font-size: 0.98rem !important;
+            padding: 0.65rem 1.2rem !important;
+            transition: transform 0.15s ease, background-color 0.15s ease;
         }}
         div.stButton > button[kind="primary"] *,
-        div.stFormSubmitButton > button[kind="primary"] * {{
+        div.stFormSubmitButton > button[kind="primary"] *,
+        div.stDownloadButton > button * {{
             color: #FFFFFF !important;
         }}
         div.stButton > button[kind="primary"]:hover,
-        div.stFormSubmitButton > button[kind="primary"]:hover {{
+        div.stFormSubmitButton > button[kind="primary"]:hover,
+        div.stDownloadButton > button:hover {{
             background-color: #0F766E !important;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(13, 148, 136, 0.22);
         }}
-        /* 보조 버튼 */
         div.stButton > button[kind="secondary"] {{
             background-color: #FFFFFF !important;
             color: #1B2A4A !important;
-            border: 1px solid #CBD5E1 !important;
-            border-radius: 10px !important;
-            font-weight: 500 !important;
-            transition: background-color 0.15s ease, border-color 0.15s ease;
+            border: 1.5px solid #CBD5E1 !important;
+            border-radius: 12px !important;
+            font-weight: 600 !important;
+            padding: 0.6rem 1rem !important;
         }}
         div.stButton > button[kind="secondary"]:hover {{
             background-color: #F0FDFA !important;
             border-color: #0D9488 !important;
         }}
-        /* 카드형 레이아웃 */
+        /* 심플 카드 레이아웃 */
         .hq-card {{
             background: #FFFFFF;
-            border: 1px solid #E5E0D5;
-            border-radius: 14px;
-            padding: 1.25rem 1.4rem;
+            border: 1.5px solid #E5E0D5;
+            border-radius: 16px;
+            padding: 1.35rem 1.5rem;
             margin-bottom: 1rem;
-            box-shadow: 0 2px 6px rgba(27, 42, 74, 0.04);
-            transition: transform 0.18s ease, box-shadow 0.18s ease;
+            box-shadow: 0 3px 10px rgba(27, 42, 74, 0.04);
         }}
         .hq-card-selected {{
             background: #F0FDFA;
             border: 2px solid #0D9488;
-            border-radius: 14px;
-            padding: 1.25rem 1.4rem;
+            border-radius: 16px;
+            padding: 1.35rem 1.5rem;
             margin-bottom: 1rem;
-            box-shadow: 0 4px 14px rgba(13, 148, 136, 0.12);
+            box-shadow: 0 4px 14px rgba(13, 148, 136, 0.10);
         }}
         .hq-card-coral {{
             background: #FFFDFB;
-            border-left: 4px solid #E05A47;
+            border-left: 5px solid #E05A47;
             border-top: 1px solid #F3DCD8;
             border-right: 1px solid #F3DCD8;
             border-bottom: 1px solid #F3DCD8;
-            border-radius: 12px;
-            padding: 1rem 1.25rem;
+            border-radius: 14px;
+            padding: 1.1rem 1.35rem;
             margin-bottom: 1rem;
         }}
         .hq-badge-teal {{
             display: inline-block;
             background: #CCFBF1;
             color: #0F766E !important;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 0.2rem 0.65rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.22rem 0.7rem;
             border-radius: 999px;
             margin-right: 0.4rem;
         }}
@@ -208,9 +205,9 @@ def inject_quest_css(reduce_motion: bool = False):
             display: inline-block;
             background: #FEE2E2;
             color: #B91C1C !important;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 0.2rem 0.65rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.22rem 0.7rem;
             border-radius: 999px;
             margin-right: 0.4rem;
         }}
@@ -218,57 +215,38 @@ def inject_quest_css(reduce_motion: bool = False):
             display: inline-block;
             background: #E2E8F0;
             color: #1B2A4A !important;
-            font-size: 0.8rem;
-            font-weight: 600;
-            padding: 0.2rem 0.65rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            padding: 0.22rem 0.7rem;
             border-radius: 999px;
             margin-right: 0.4rem;
         }}
-        /* 학습 흐름 7단계 안내 바 */
-        .hq-step-bar {{
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.4rem;
+        .hq-guide-bar {{
             background: #FFFFFF;
-            border: 1px solid #E5E0D5;
+            border-left: 5px solid #0D9488;
+            border-top: 1px solid #E5E0D5;
+            border-right: 1px solid #E5E0D5;
+            border-bottom: 1px solid #E5E0D5;
             border-radius: 12px;
-            padding: 0.75rem 1rem;
-            margin-bottom: 1rem;
+            padding: 0.85rem 1.2rem;
+            margin-bottom: 1.1rem;
+            font-size: 0.98rem;
         }}
-        .hq-step-pill {{
-            font-size: 0.82rem;
-            padding: 0.28rem 0.65rem;
-            border-radius: 8px;
-            background: #F1F5F9;
-            color: #475569;
-            font-weight: 500;
-        }}
-        .hq-step-pill.active {{
-            background: #0D9488;
-            color: #FFFFFF !important;
-            font-weight: 600;
-        }}
-        /* 배지 획득 1회 효과 */
         @keyframes hqPopIn {{
-            0% {{ opacity: 0; transform: translateY(-6px) scale(0.98); }}
-            100% {{ opacity: 1; transform: translateY(0) scale(1); }}
+            0% {{ opacity: 0; transform: translateY(-5px); }}
+            100% {{ opacity: 1; transform: translateY(0); }}
         }}
         .hq-award-banner {{
-            background: linear-gradient(90deg, #F0FDFA 0%, #FFFDF9 100%);
-            border: 1.5px solid #0D9488;
-            border-radius: 12px;
+            background: #F0FDFA;
+            border: 2px solid #0D9488;
+            border-radius: 14px;
             padding: 0.9rem 1.2rem;
             margin-bottom: 1rem;
-            animation: hqPopIn 0.28s ease-out 1;
+            animation: hqPopIn 0.25s ease-out 1;
         }}
-        /* 모바일 및 태블릿 반응형 */
         @media (max-width: 768px) {{
             .hq-card, .hq-card-selected {{
-                padding: 1rem;
-            }}
-            .hq-step-bar {{
-                gap: 0.25rem;
-                padding: 0.55rem;
+                padding: 1.05rem;
             }}
             div.stButton > button {{
                 width: 100% !important;
@@ -281,20 +259,13 @@ def inject_quest_css(reduce_motion: bool = False):
     )
 
 
-def render_orientation_box(now_task: str, why_needed: str, next_step: str):
-    """학생이 '지금 할 일', '이 활동이 필요한 이유', '다음 단계'를 즉시 이해하도록 안내."""
+def render_simple_guide(now_do: str, why_do: str):
+    """중학생도 한눈에 읽을 수 있는 2줄 핵심 안내 바."""
     st.markdown(
         f"""
-        <div class="hq-card" style="background:#F8FAFC; border-left: 4px solid #0D9488; padding: 0.95rem 1.2rem;">
-            <div style="font-size:0.92rem; margin-bottom:0.3rem;">
-                <span class="hq-badge-teal">지금 할 일</span> <b>{now_task}</b>
-            </div>
-            <div style="font-size:0.88rem; color:#334155; margin-bottom:0.25rem;">
-                • <b>이 활동이 필요한 이유</b>: {why_needed}
-            </div>
-            <div style="font-size:0.88rem; color:#334155;">
-                • <b>다음 단계</b>: {next_step}
-            </div>
+        <div class="hq-guide-bar">
+            <div><span class="hq-badge-teal">지금 할 일</span> <b>{now_do}</b></div>
+            <div style="font-size:0.88rem; color:#475569; margin-top:0.25rem;">💡 <b>왜 필요할까요?</b> {why_do}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -302,14 +273,14 @@ def render_orientation_box(now_task: str, why_needed: str, next_step: str):
 
 
 def render_one_time_notifications():
-    """새 배지 획득 또는 전체 미션 완료 시 1회성 알림을 표시(애니메이션 대기 없이 즉시 다음 행동 가능)."""
+    """새 배지 획득 또는 미션 3개 완료 시 1회성 축하 배너."""
     badge = st.session_state.pop("hq_pending_badge_notice", None)
     if badge:
         st.markdown(
             f"""
             <div class="hq-award-banner">
-                <span class="hq-badge-teal">새 역량 배지 획득</span>
-                <b>🏅 {badge['title']}</b> ({badge['competency']}) — {badge['desc']}
+                <span class="hq-badge-teal">새 배지 획득!</span>
+                <b>🏅 {badge['title']}</b> — {badge['desc']}
             </div>
             """,
             unsafe_allow_html=True,
@@ -322,221 +293,187 @@ def render_one_time_notifications():
         st.markdown(
             f"""
             <div class="hq-award-banner" style="border-color:#E05A47;">
-                <span class="hq-badge-coral">완전학습 달성 축하</span>
-                <b>🎉 [{celeb}]의 3단계 임상 미션을 모두 완주했습니다!</b>
-                이제 협력학습 탭에서 팀 공동 해결안을 정리하거나 학습 기록을 다운로드할 수 있습니다.
+                <span class="hq-badge-coral">미션 3개 모두 클리어!</span>
+                <b>🎉 축하합니다! 오늘 실습 미션을 모두 해결했어요. 이제 [4단계: 활동지 저장·인쇄]로 이동해 보세요!</b>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
 
+# =========================================================
+# 1단계: 미션룸 홈 (심플한 시작 화면)
+# =========================================================
 def render_home_dashboard():
-    """첫 화면: 오늘의 미션, 예상 소요시간, 학습목표, 진행률, 미션 시작/이어하기 주요 행동 버튼."""
-    unit = get_current_unit_data()
     scenario = get_current_scenario_data()
     completed, total, ratio = get_scenario_progress(scenario)
     active_idx = st.session_state.get("hq_active_mission_idx", 0)
     current_mission = scenario["missions"][min(active_idx, len(scenario["missions"]) - 1)]
+    earned_badges = st.session_state.get("hq_earned_badges", [])
+    xp = st.session_state.get("hq_xp", 0)
 
-    render_orientation_box(
-        now_task="오늘의 임상 미션과 학습목표를 확인하고 [미션 시작 / 이어하기] 버튼을 눌러 활동을 시작하세요.",
-        why_needed="짧은 보건 현장 상황(3~5분)에서 단서를 찾고 판단 근거를 설명하는 훈련이 실제 병원 실습에서의 환자안전 역량을 길러줍니다.",
-        next_step="단원 질문 & 가상 실습 상황 3개 중 1개 선택 → 3단계 미션 도전 및 피드백 → 팀 공동 해결안 작성",
+    render_simple_guide(
+        now_do="오늘의 미션 주제를 읽고 아래 [🚀 미션 시작하기] 버튼을 눌러보세요!",
+        why_do="짧은 병원 현장 미션(3~5분)을 하나씩 해결하며 환자를 안전하게 돌보는 판단력을 키울 수 있어요.",
     )
 
-    col_main, col_stat = st.columns([1.65, 1], gap="medium")
+    col_left, col_right = st.columns([1.5, 1], gap="medium")
 
-    with col_main:
+    with col_left:
         st.markdown(
             f"""
             <div class="hq-card-selected">
-                <div style="margin-bottom:0.5rem;">
-                    <span class="hq-badge-teal">오늘의 미션</span>
-                    <span class="hq-badge-navy">예상 소요시간: {current_mission['estimated_minutes']}~5분</span>
-                    <span class="hq-badge-coral">{current_mission['question_type']}</span>
+                <div style="margin-bottom:0.6rem;">
+                    <span class="hq-badge-teal">오늘의 실습 주제</span>
+                    <span class="hq-badge-navy">⏱ 소요시간 약 3~5분</span>
                 </div>
-                <h3 style="margin:0.2rem 0 0.5rem 0;">{scenario['title']}</h3>
-                <p style="margin-bottom:0.6rem; font-weight:600; color:#0F766E;">
-                    현재 도전 단계: {current_mission['title']}
+                <h3 style="margin:0.2rem 0 0.6rem 0;">{scenario['title']}</h3>
+                <p style="font-size:0.96rem; color:#334155; margin-bottom:0.8rem;">
+                    {scenario['summary']}
                 </p>
-                <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:10px; padding:0.75rem 1rem; margin-bottom:0.6rem;">
-                    <b>🎯 학습목표</b>: {current_mission['learning_objective']}
-                </div>
-                <div style="font-size:0.9rem; color:#334155;">
-                    <b>PBL 실습 초점</b>: {scenario['pbl_focus']}
+                <div style="background:#FFFFFF; border:1px solid #CBD5E1; border-radius:12px; padding:0.85rem 1rem;">
+                    <b>🎯 오늘의 목표</b>: {current_mission['learning_objective']}
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        btn_label = "▶ 미션 이어하기 (진행 중)" if completed > 0 or st.session_state["hq_submissions"] else "▶ 오늘의 미션 시작하기 (3~5분)"
         c1, c2 = st.columns(2)
         with c1:
-            if st.button(btn_label, type="primary", use_container_width=True, key="home_start_mission_btn"):
-                st.session_state["hq_nav_view"] = "🩺 단계별 미션 수행"
+            start_label = "🚀 미션 이어하기 →" if completed > 0 else "🚀 바로 미션 시작하기 →"
+            if st.button(start_label, type="primary", use_container_width=True, key="home_start_btn"):
+                st.session_state["hq_nav_view"] = "🩺 3단계: 미션 도전"
                 st.rerun()
         with c2:
-            if st.button("🔍 단원 질문 & 가상 실습 상황 3개 고르기", type="secondary", use_container_width=True, key="home_explore_btn"):
-                st.session_state["hq_nav_view"] = "🧭 단원 질문 & 실습상황 선택"
+            if st.button("🧭 다른 실습 상황 고르기 (3가지)", type="secondary", use_container_width=True, key="home_pick_btn"):
+                st.session_state["hq_nav_view"] = "🧭 2단계: 상황 고르기"
                 st.rerun()
 
-    with col_stat:
-        earned_badges = st.session_state.get("hq_earned_badges", [])
-        xp = st.session_state.get("hq_xp", 0)
+    with col_right:
+        badge_names = [f"🏅 {BADGE_DEFINITIONS[b]['title']}" for b in earned_badges if b in BADGE_DEFINITIONS]
+        badge_html = " · ".join(badge_names) if badge_names else "아직 획득한 배지가 없어요. 첫 미션에 도전해 보세요!"
         st.markdown(
             f"""
             <div class="hq-card">
-                <h4 style="margin-top:0;">📊 나의 성장 및 진행 현황</h4>
-                <p style="font-size:0.9rem; margin-bottom:0.3rem;">
-                    <b>선택 시나리오 진행률</b>: {completed} / {total} 미션 완료 ({int(ratio * 100)}%)
+                <h4 style="margin-top:0;">🌱 나의 성장 현황</h4>
+                <p style="font-size:1.02rem; margin-bottom:0.4rem;">
+                    • 해결한 미션: <b>{completed} / {total}개</b> ({int(ratio * 100)}%)<br>
+                    • 나의 성장 점수: <b>{xp}점</b>
                 </p>
-                <p style="font-size:0.9rem; margin-bottom:0.3rem;">
-                    <b>누적 학습 성취도</b>: {xp} pt <span style="font-size:0.8rem; color:#475569;">(근거 설명·개선 중심 보상)</span>
-                </p>
-                <p style="font-size:0.9rem; margin-bottom:0.4rem;">
-                    <b>달성 역량 배지</b>: {len(earned_badges)} / {len(BADGE_DEFINITIONS)}개
-                </p>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        st.progress(ratio, text=f"현재 실습 상황 완료율: {int(ratio * 100)}%")
-
-        # 팀 공동 목표 (개인 순위표 대신 공동 목표 제시)
-        team_contrib = min(100, int(ratio * 60) + (20 if st.session_state["hq_unit_questions"] else 0) + (20 if st.session_state["hq_team_notes"].get("team_conclusion") else 0))
-        st.markdown(
-            f"""
-            <div class="hq-card" style="padding:0.9rem 1.1rem;">
-                <div style="font-size:0.85rem; font-weight:600; color:#0F766E; margin-bottom:0.25rem;">
-                    🤝 {SITE_CONFIG['team_goal_title']}
-                </div>
-                <div style="font-size:0.83rem; color:#334155;">
-                    개인 순위 경쟁 없이, 우리 모둠의 근거 비교와 안전 수칙 완수로 공동 목표를 채웁니다. (현재 모둠 기여 달성도: <b>{team_contrib}%</b>)
+                <div style="font-size:0.88rem; background:#F8FAFC; padding:0.65rem 0.85rem; border-radius:10px; border:1px solid #E2E8F0;">
+                    <b>획득한 역량 배지</b><br>{badge_html}
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        st.progress(ratio, text=f"오늘 미션 달성률 {int(ratio * 100)}%")
 
 
+# =========================================================
+# 2단계: 용어 힌트 & 가상 실습 상황 3개 중 1개 고르기
+# =========================================================
 def render_unit_inquiry_and_scenario_selection():
-    """단원 질문(개념·의학용어) → AI 보건튜터 단계별 피드백 → 가상 실습 상황 3개 중 1개 선택."""
     unit = get_current_unit_data()
     current_scen = get_current_scenario_data()
 
-    render_orientation_box(
-        now_task="단원에서 궁금한 의학용어나 개념을 질문하고, 제시된 가상 실습 상황 3개(A·B·C) 중 최종 1개를 선택하세요.",
-        why_needed="내가 궁금한 개념을 실제 병동 상황과 연결해 직접 실습 시나리오를 고를 때 자기주도학습능력과 임상 추론력이 높아집니다.",
-        next_step="가상 실습 상황 1개 선택 완료 후 [이 실습 상황으로 3단계 미션 도전하기] 클릭",
+    render_simple_guide(
+        now_do="어려운 의학용어를 클릭해 뜻을 확인하고, 오늘 도전할 실습 상황(A·B·C) 중 1개를 골라주세요!",
+        why_do="개념을 먼저 이해하고 내가 원하는 병원 상황을 직접 고르면 훨씬 쉽고 재미있게 문제를 해결할 수 있어요.",
     )
 
+    # 1) 클릭하면 바로 뜻이 나오는 심플 의학용어 카드 + 1줄 질문창
+    st.subheader("1️⃣ 헷갈리는 의학용어 콕 집어 보기")
+    term_items = list(unit["key_terms"].items())
+    if "hq_selected_term_idx" not in st.session_state:
+        st.session_state["hq_selected_term_idx"] = 0
+
+    t_cols = st.columns(len(term_items))
+    for i, (t_name, _) in enumerate(term_items):
+        short_name = t_name.split("(")[0].strip()
+        is_active_term = st.session_state.get("hq_selected_term_idx", 0) == i
+        with t_cols[i]:
+            if st.button(
+                f"📘 {short_name}",
+                key=f"term_btn_{i}",
+                type="primary" if is_active_term else "secondary",
+                use_container_width=True,
+            ):
+                st.session_state["hq_selected_term_idx"] = i
+                st.rerun()
+
+    sel_t_idx = min(st.session_state.get("hq_selected_term_idx", 0), len(term_items) - 1)
+    sel_t_name, sel_t_desc = term_items[sel_t_idx]
     st.markdown(
-        """
-        <div class="hq-card-coral">
-            <b>🔒 개인정보 및 건강정보 보호 안내</b>: 본 학습 공간에는 실제 환자의 실명·병원명이나 학생 본인의 실제 질환·건강정보를 입력하지 마세요. 모든 실습은 가상의 환자 사례로만 진행됩니다.
+        f"""
+        <div class="hq-card" style="background:#F0FDFA; border-color:#0D9488; padding:1rem 1.25rem;">
+            <span class="hq-badge-teal">쉬운 용어 풀이</span> <b>{sel_t_name}</b><br>
+            <span style="font-size:0.95rem;">{sel_t_desc}</span>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    col_q, col_terms = st.columns([1.4, 1], gap="medium")
-
-    with col_q:
-        st.subheader("1️⃣ 단원 개념·의학용어 질문하기 (AI 보건튜터 코칭)")
-        with st.form("unit_inquiry_form", clear_on_submit=False):
-            student_level = st.selectbox(
-                "나의 사전 이해도 선택",
-                [
-                    "기초 (용어 뜻과 쉬운 비유부터 차근차근 알고 싶어요)",
-                    "중급 (개념은 알지만 실제 병동 상황에서 어떻게 적용하는지 궁금해요)",
-                    "심화 (우선순위 판단 근거와 예외 상황까지 깊게 탐구하고 싶어요)",
-                ],
-                index=0,
-            )
+    with st.expander("💬 AI 보건튜터에게 더 궁금한 점 질문하기 (클릭해서 열기)"):
+        st.caption("※ 실제 환자 실명이나 내 개인 건강정보는 적지 마세요.")
+        with st.form("simple_q_form", clear_on_submit=False):
             q_input = st.text_input(
-                "궁금한 의학용어, 개념, 또는 실습 질문을 적어 주세요",
-                placeholder="예: 비말주의와 접촉주의는 언제 구분해 쓰나요? / 빈뇨와 다뇨는 어떻게 다른가요?",
+                "이 단원에서 궁금한 점을 한 줄로 적어보세요",
+                placeholder="예: 비말주의와 접촉주의는 무엇이 다른가요?",
             )
-            submitted_q = st.form_submit_button("💬 AI 보건튜터에게 질문하고 실습 상황 연결받기", type="primary", use_container_width=True)
-
-        if submitted_q:
-            if not q_input.strip():
-                st.warning("궁금한 용어나 개념 질문을 한 문장으로 입력해 주세요.")
-            else:
-                generate_unit_inquiry_feedback(unit, q_input, student_level.split("(")[0].strip())
-                st.rerun()
-
+            q_sub = st.form_submit_button("질문하고 답변 보기", type="primary")
+        if q_sub and q_input.strip():
+            generate_unit_inquiry_feedback(unit, q_input, "고2 눈높이")
+            st.rerun()
         if st.session_state["hq_unit_questions"]:
-            latest_q = st.session_state["hq_unit_questions"][-1]
-            st.markdown(
-                f"""
-                <div class="hq-card" style="background:#F0FDFA; border-color:#0D9488;">
-                    <span class="hq-badge-teal">AI 보건튜터 단계별 피드백</span>
-                    <span class="hq-badge-navy">질문: {latest_q['question']}</span>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.markdown(latest_q["feedback_markdown"])
-
-    with col_terms:
-        st.subheader("📘 단원 핵심 의학용어 사전")
-        st.caption(f"현재 단원: {st.session_state['hq_selected_unit']}")
-        for term, desc in unit["key_terms"].items():
-            st.markdown(
-                f"""
-                <div class="hq-card" style="padding:0.85rem 1rem; margin-bottom:0.6rem;">
-                    <div style="font-weight:700; color:#0F766E; margin-bottom:0.2rem;">• {term}</div>
-                    <div style="font-size:0.88rem; color:#334155;">{desc}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+            last_q = st.session_state["hq_unit_questions"][-1]
+            st.info(f"**질문**: {last_q['question']}\n\n{last_q['feedback_markdown']}")
 
     st.markdown("---")
-    st.subheader("2️⃣ 가상 실습 상황 3개 중 최종 1개 선택하기")
-    st.caption("각 카드의 실습 초점과 난이도를 비교한 뒤, 오늘 도전할 최종 실습 상황 1개를 선택하세요.")
 
+    # 2) 가상 실습 상황 3개(A, B, C) 중 1개 선택 카드 (핵심만 간결하게)
+    st.subheader("2️⃣ 오늘 도전할 가상 실습 상황 1개 고르기")
     scen_cols = st.columns(3, gap="medium")
     for idx, scen in enumerate(unit["scenarios"]):
         is_selected = scen["scenario_id"] == current_scen["scenario_id"]
         c_done, c_total, _ = get_scenario_progress(scen)
         card_class = "hq-card-selected" if is_selected else "hq-card"
-        status_tag = "✅ 현재 선택됨" if is_selected else "선택 가능"
 
         with scen_cols[idx]:
             st.markdown(
                 f"""
                 <div class="{card_class}">
                     <div style="margin-bottom:0.4rem;">
-                        <span class="hq-badge-teal">가상 실습 {scen['code']}</span>
-                        <span class="hq-badge-navy">{scen['difficulty']}</span>
+                        <span class="hq-badge-teal">실습 상황 {scen['code']}</span>
+                        <span class="hq-badge-navy">난이도: {scen['difficulty']}</span>
                     </div>
-                    <h4 style="margin:0.2rem 0 0.5rem 0; font-size:1.03rem;">{scen['title']}</h4>
-                    <p style="font-size:0.88rem; color:#334155; margin-bottom:0.6rem;">{scen['summary']}</p>
-                    <div style="font-size:0.82rem; color:#0F766E; background:#FFFFFF; padding:0.5rem 0.65rem; border-radius:8px; border:1px solid #E2E8F0; margin-bottom:0.5rem;">
-                        <b>PBL 흐름</b>: {scen['pbl_focus']}
-                    </div>
-                    <div style="font-size:0.8rem; color:#475569;">
-                        진행 현황: {c_done}/{c_total} 미션 완료 · <b>{status_tag}</b>
+                    <h4 style="margin:0.2rem 0 0.5rem 0; font-size:1.05rem;">{scen['title']}</h4>
+                    <p style="font-size:0.9rem; color:#334155; margin-bottom:0.6rem;">{scen['summary']}</p>
+                    <div style="font-size:0.84rem; color:#0F766E; font-weight:600;">
+                        진행 현황: {c_done} / {c_total} 미션 완료
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
-            btn_type = "primary" if is_selected else "secondary"
-            btn_text = f"✔ 상황 {scen['code']} 선택됨 (미션 시작)" if is_selected else f"상황 {scen['code']} 최종 선택하기"
-            if st.button(btn_text, key=f"select_scen_{scen['scenario_id']}", type=btn_type, use_container_width=True):
+            btn_label = f"🚀 상황 {scen['code']} 선택하고 미션 시작 →" if not is_selected else f"✔ 상황 {scen['code']}로 미션 도전하기 →"
+            if st.button(
+                btn_label,
+                key=f"pick_scen_{scen['scenario_id']}",
+                type="primary" if is_selected else "secondary",
+                use_container_width=True,
+            ):
                 st.session_state["hq_selected_scenario_id"] = scen["scenario_id"]
                 st.session_state["hq_active_mission_idx"] = 0
-                st.session_state["hq_nav_view"] = "🩺 단계별 미션 수행"
+                st.session_state["hq_nav_view"] = "🩺 3단계: 미션 도전"
                 st.rerun()
 
 
+# =========================================================
+# 3단계: 미션 도전 (하나씩 클릭하며 해결하는 깔끔한 구성)
+# =========================================================
 def render_mission_runner():
-    """7단계 학습 흐름: 상황 확인 → 핵심 정보 탐색 → 판단 선택 → 근거 작성 → 피드백 → 재도전 → 성찰."""
     scenario = get_current_scenario_data()
     missions = scenario["missions"]
     active_idx = min(st.session_state.get("hq_active_mission_idx", 0), len(missions) - 1)
@@ -545,375 +482,336 @@ def render_mission_runner():
     existing_sub = st.session_state["hq_submissions"].get(m_id)
     existing_ref = st.session_state["hq_reflections"].get(m_id, "")
 
-    # 현재 7단계 중 활성 단계 계산
-    if not existing_sub:
-        current_flow_step = 3  # 상황확인(1)·정보탐색(2)·판단선택(3)·근거작성(4) 진행 중
-    elif not existing_sub["is_correct"]:
-        current_flow_step = 6  # 피드백(5) 및 재도전(6) 단계
-    elif not existing_ref:
-        current_flow_step = 7  # 성찰(7) 단계
-    else:
-        current_flow_step = 7
-
-    flow_labels = [
-        (1, "1. 상황 확인"),
-        (2, "2. 핵심 정보 탐색"),
-        (3, "3. 판단 선택"),
-        (4, "4. 근거 작성"),
-        (5, "5. 피드백"),
-        (6, "6. 재도전·보완"),
-        (7, "7. 성찰"),
-    ]
-    pills_html = "".join(
-        [
-            f'<span class="hq-step-pill {"active" if step_no <= current_flow_step else ""}">{label}</span>'
-            for step_no, label in flow_labels
-        ]
-    )
-    st.markdown(f'<div class="hq-step-bar">{pills_html}</div>', unsafe_allow_html=True)
-
-    render_orientation_box(
-        now_task=f"[{mission['title']}]의 임상 단서를 읽고 가장 적절한 판단 선택지와 그 이유(근거)를 작성해 제출하세요.",
-        why_needed=mission["learning_objective"],
-        next_step="제출 후 선택지별 해설·피드백 확인 → 놓친 단서 보완 재도전 → 성찰 질문 기록 후 다음 미션 이동",
+    render_simple_guide(
+        now_do=f"[미션 {mission['step_num']}] 상황을 읽고 알맞은 행동 번호와 그 이유를 한 줄로 적어 제출해 보세요!",
+        why_do=mission["learning_objective"],
     )
 
-    # 상단 미션 1 / 2 / 3 전환 버튼
+    # 미션 1 -> 2 -> 3 단계 탭 버튼
     m_cols = st.columns(len(missions))
     for i, m_item in enumerate(missions):
         sub_i = st.session_state["hq_submissions"].get(m_item["id"])
-        done_mark = "✅ " if (sub_i and sub_i.get("is_correct") and len(sub_i.get("rationale", "")) >= 5) else ""
-        b_type = "primary" if i == active_idx else "secondary"
+        is_cleared = bool(sub_i and sub_i.get("is_correct") and len(sub_i.get("rationale", "")) >= 5)
+        icon = "✅" if is_cleared else f"{i + 1}️⃣"
         with m_cols[i]:
             if st.button(
-                f"{done_mark}미션 {m_item['step_num']} ({m_item['question_type'].split(' ')[0]})",
-                key=f"tab_btn_{m_item['id']}",
-                type=b_type,
+                f"{icon} 미션 {m_item['step_num']} ({'개념 확인' if i == 0 else '상황 판단'})",
+                key=f"step_m_{m_item['id']}",
+                type="primary" if i == active_idx else "secondary",
                 use_container_width=True,
             ):
                 st.session_state["hq_active_mission_idx"] = i
                 st.rerun()
 
-    # [1단계: 상황 확인] & [2단계: 핵심 정보 탐색]
-    col_sit, col_clue = st.columns([1.35, 1], gap="medium")
-    with col_sit:
-        st.markdown(
-            f"""
-            <div class="hq-card">
-                <div style="margin-bottom:0.45rem;">
-                    <span class="hq-badge-teal">미션 {mission['step_num']} / {len(missions)}</span>
-                    <span class="hq-badge-coral">{mission['question_type']}</span>
-                    <span class="hq-badge-navy">⏱ 소요시간 {mission['estimated_minutes']}분</span>
-                </div>
-                <h3 style="margin:0.2rem 0 0.6rem 0;">{mission['title']}</h3>
-                <p style="font-size:0.96rem; background:#FAF8F5; padding:0.9rem 1rem; border-radius:10px; border:1px solid #E5E0D5;">
-                    <b>📋 현장 상황</b>: {mission['situation']}
-                </p>
-                <div style="font-size:0.84rem; color:#475569; margin-top:0.5rem;">
-                    📚 <b>참고 출처</b>: {mission['reference_source']} · <b>검토 상태</b>: {mission['teacher_review_status']}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    with col_clue:
-        clues_li = "".join([f"<li style='margin-bottom:0.35rem;'>{c}</li>" for c in mission["clinical_clues"]])
-        st.markdown(
-            f"""
-            <div class="hq-card" style="background:#F0FDFA; border-color:#99F6E4;">
-                <h4 style="margin-top:0; color:#0F766E;">🔎 핵심 임상 단서 탐색</h4>
-                <ul style="padding-left:1.2rem; margin-bottom:0.5rem; font-size:0.9rem;">
-                    {clues_li}
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        with st.expander("💡 판단이 어려울 때 핵심 힌트 보기 (정답 미노출)"):
-            st.info(mission["hint"])
-
-    # [3단계: 판단 선택] & [4단계: 근거 작성] (제출 전에는 정답·해설 절대 비공개)
-    st.markdown(f"#### ✍️ 판단 선택 및 근거 작성 — {mission['question']}")
-    st.caption("실제 환자 정보나 개인 건강정보는 적지 마시고, 교과서 원리와 환자 안전 관점에서 판단 이유를 작성해 주세요.")
-
-    default_idx = existing_sub["selected_idx"] if existing_sub else 0
-    default_rationale = existing_sub["rationale"] if existing_sub else ""
-
-    with st.form(key=f"mission_form_{m_id}", clear_on_submit=False):
-        selected_option = st.radio(
-            "가장 적절한 간호 판단 선택지 (1개 선택)",
-            options=list(range(len(mission["options"]))),
-            format_func=lambda idx: f"{idx + 1}번. {mission['options'][idx]}",
-            index=default_idx,
-            key=f"radio_{m_id}",
-        )
-        rationale_input = st.text_area(
-            "그렇게 판단한 임상적 근거를 1~2문장으로 설명해 주세요 (서술형 근거 평가 반영)",
-            value=default_rationale,
-            placeholder="예: 분비물 노출 가능성이 있고 장갑이 손 위생을 대체할 수 없으므로 흐르는 물과 비누로 40~60초간 씻어야 교차감염을 막을 수 있습니다.",
-            height=95,
-            key=f"rationale_{m_id}",
-        )
-        submit_label = "🔄 피드백을 반영하여 다시 제출하기 (재도전)" if existing_sub else "✅ 판단 및 근거 제출하기"
-        submitted = st.form_submit_button(submit_label, type="primary", use_container_width=True)
-
-    if submitted:
-        evaluate_mission_submission(mission, selected_option, rationale_input)
-        st.rerun()
-
-    # [5단계: 피드백] & [6단계: 재도전] (제출 완료 후에만 공개!)
-    sub = st.session_state["hq_submissions"].get(m_id)
-    if sub:
-        st.markdown("---")
-        st.subheader("📬 AI 보건튜터 피드백 및 선택지별 해설")
-
-        col_fb1, col_fb2 = st.columns(2, gap="medium")
-        with col_fb1:
-            if sub["is_correct"]:
-                st.markdown(
-                    f"""
-                    <div class="hq-card-selected">
-                        <span class="hq-badge-teal">객관식 판단 평가: 정답 확인</span>
-                        <span class="hq-badge-navy">시도 횟수: {sub['attempts']}회</span>
-                        <h4 style="margin:0.4rem 0; color:#0F766E;">✅ 정확한 임상 판단입니다!</h4>
-                        <p style="font-size:0.9rem; margin-bottom:0;">
-                            선택하신 <b>{sub['selected_idx'] + 1}번</b> 행동이 환자 안전과 감염관리 표준지침에 정확히 부합합니다.
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                # 오답 시 비난이나 감점 없이 놓친 단서와 다시 생각할 질문 제시
-                st.markdown(
-                    f"""
-                    <div class="hq-card-coral">
-                        <span class="hq-badge-coral">다시 생각해 보기 (감점 없음)</span>
-                        <span class="hq-badge-navy">시도 횟수: {sub['attempts']}회</span>
-                        <h4 style="margin:0.4rem 0;">🧭 놓친 단서를 함께 다시 확인해 볼까요?</h4>
-                        <p style="font-size:0.9rem; margin-bottom:0.4rem;">
-                            <b>선택하신 항목 해설</b>: {mission['option_explanations'][sub['selected_idx']]}
-                        </p>
-                        <p style="font-size:0.9rem; background:#FFFFFF; padding:0.65rem 0.85rem; border-radius:8px; margin-bottom:0;">
-                            💡 <b>{mission['missed_clue_guide']}</b><br>
-                            위 입력창에서 선택지와 근거를 수정한 뒤 <b>[🔄 피드백을 반영하여 다시 제출하기]</b> 버튼을 눌러 재도전해 보세요!
-                        </p>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-        with col_fb2:
-            st.markdown(
-                f"""
-                <div class="hq-card">
-                    <span class="hq-badge-navy">서술형 근거 평가 (객관식과 분리 평가)</span>
-                    <h4 style="margin:0.4rem 0;">📝 나의 판단 근거 검토</h4>
-                    <p style="font-size:0.88rem; color:#334155; background:#F8FAFC; padding:0.6rem 0.8rem; border-radius:8px;">
-                        "{sub['rationale'] if sub['rationale'] else '(아직 근거를 입력하지 않았습니다)'}"
-                    </p>
-                    <p style="font-size:0.88rem; margin-bottom:0;">
-                        <b>코칭 피드백</b>: {sub['rationale_status']}
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-        # 선택지별 전체 해설 (제출 이후 공개)
-        with st.expander("📖 선택지 1~4번 전체 상세 해설 및 출처 확인하기", expanded=sub["is_correct"]):
-            for idx, exp_text in enumerate(mission["option_explanations"]):
-                prefix = "✅ [정답] " if idx == mission["correct_index"] else f"• [{idx + 1}번 보기] "
-                st.markdown(f"**{prefix}{mission['options'][idx]}**\n  - 해설: {exp_text}")
-            st.caption(f"근거 출처: {mission['reference_source']} ({mission['teacher_review_status']})")
-
-        # [7단계: 성찰] 및 다음 미션 이동
-        st.markdown("#### 🌱 7단계 · 성찰 기록 및 다음 단계 이동")
-        with st.form(key=f"reflection_form_{m_id}", clear_on_submit=False):
-            ref_val = st.text_input(
-                f"💭 성찰 질문: {mission['reflection_prompt']}",
-                value=existing_ref,
-                placeholder="오늘 미션에서 깨달은 나만의 현장 적용 다짐을 한 문장으로 적어 보세요.",
-            )
-            ref_saved = st.form_submit_button("💾 성찰 기록 저장하기 (+20 pt)", type="secondary")
-        if ref_saved:
-            if save_mission_reflection(mission, ref_val):
-                st.success("성찰 기록이 나의 성장 로그에 저장되었습니다!")
-                st.rerun()
-            else:
-                st.warning("성찰 내용을 한 문장으로 입력해 주세요.")
-
-        nav_c1, nav_c2 = st.columns(2)
-        with nav_c1:
-            if active_idx < len(missions) - 1:
-                if st.button(f"▶ 다음 미션(미션 {active_idx + 2})으로 이동하기", type="primary", use_container_width=True):
-                    st.session_state["hq_active_mission_idx"] = active_idx + 1
-                    st.rerun()
-            else:
-                if st.button("🤝 3단계 미션 완료! 팀 협력학습(공동 해결안)으로 이동", type="primary", use_container_width=True):
-                    st.session_state["hq_nav_view"] = "🤝 팀 협력학습 & 성장 기록"
-                    st.rerun()
-        with nav_c2:
-            if st.button("🏠 미션룸 홈 화면으로", type="secondary", use_container_width=True):
-                st.session_state["hq_nav_view"] = "🏠 미션룸 홈"
-                st.rerun()
-
-
-def render_collaboration_and_growth():
-    """협력학습(개인 판단 → 팀원 근거 비교 → 팀 공동 해결안 작성) 및 성장 기록·다운로드."""
-    scenario = get_current_scenario_data()
-
-    render_orientation_box(
-        now_task="개인 미션에서 작성한 나의 근거를 팀원과 비교하고, 우리 모둠의 공동 해결안과 토의 후 바뀐 생각을 기록하세요.",
-        why_needed="병원 현장은 다학제·팀 협력이 필수입니다. 서로 놓친 임상 단서를 비교하며 더 안전한 간호 의사결정에 도달할 수 있습니다.",
-        next_step="팀 공동 해결안 저장 후 [학습 결과 JSON / TXT 다운로드]로 과제 제출용 파일 보관",
-    )
-
+    # [카드 1] 현장 상황과 핵심 단서 (한눈에 들어오게 압축)
+    clues_html = " · ".join([f"<b>{c}</b>" for c in mission["clinical_clues"]])
     st.markdown(
-        """
-        <div class="hq-card-coral">
-            <b>ℹ️ 협력학습 시연 모드(한 기기 함께 작성) 및 데이터 보존 범위 안내</b><br>
-            현재 외부 실시간 데이터베이스(영속 저장소)가 연결되어 있지 않으므로, 다른 학생의 세션과 데이터가 섞이지 않도록 <b>현재 브라우저 세션(`st.session_state`) 내에서 한 기기로 모둠원이 함께 작성하는 시연 모드</b>로 작동합니다. 새로고침이나 브라우저 종료 시 세션 기록이 초기화될 수 있으니 작성 후 반드시 아래 <b>결과 다운로드 버튼</b>으로 파일을 저장하세요.
+        f"""
+        <div class="hq-card">
+            <div style="margin-bottom:0.4rem;">
+                <span class="hq-badge-teal">미션 {mission['step_num']} / {len(missions)}</span>
+                <span class="hq-badge-coral">{mission['question_type']}</span>
+            </div>
+            <h3 style="margin:0.2rem 0 0.6rem 0;">{mission['title']}</h3>
+            <p style="font-size:1rem; background:#FAF8F5; padding:0.9rem 1.1rem; border-radius:12px; border:1px solid #E5E0D5; margin-bottom:0.6rem;">
+                📋 <b>상황</b>: {mission['situation']}
+            </p>
+            <div style="font-size:0.9rem; background:#F0FDFA; padding:0.65rem 0.95rem; border-radius:10px; color:#0F766E;">
+                🔎 <b>핵심 단서</b>: {clues_html}
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    col_left, col_right = st.columns([1.25, 1], gap="medium")
+    with st.expander("💡 잘 모르겠을 때 힌트 보기 (클릭)"):
+        st.info(mission["hint"])
 
-    with col_left:
-        st.subheader("🤝 PBL 3단계 협력학습 워크스페이스")
-        st.caption(f"대상 실습 상황: {scenario['title']}")
+    # [카드 2] 판단 선택 & 이유 한 줄 적기 (제출 전 정답 비공개)
+    default_idx = existing_sub["selected_idx"] if existing_sub else 0
+    default_rationale = existing_sub["rationale"] if existing_sub else ""
 
-        # 내가 작성한 미션별 근거 요약 자동 불러오기
-        my_rationales = []
-        for m in scenario["missions"]:
-            sub = st.session_state["hq_submissions"].get(m["id"])
-            if sub and sub.get("rationale"):
-                my_rationales.append(f"- [미션 {m['step_num']}] {sub['rationale']}")
-        auto_my_summary = "\n".join(my_rationales) if my_rationales else ""
+    with st.form(key=f"form_{m_id}", clear_on_submit=False):
+        st.markdown(f"**❓ 질문: {mission['question']}**")
+        selected_option = st.radio(
+            "알맞은 행동을 골라보세요",
+            options=list(range(len(mission["options"]))),
+            format_func=lambda idx: f"{idx + 1}번. {mission['options'][idx]}",
+            index=default_idx,
+            key=f"radio_{m_id}",
+        )
+        rationale_input = st.text_input(
+            "✍️ 왜 그렇게 생각했나요? (이유를 한 문장으로 편하게 적어보세요)",
+            value=default_rationale,
+            placeholder="예: 분비물이 묻었을 가능성이 있어서 물과 비누로 깨끗이 씻어야 안전하기 때문입니다.",
+            key=f"rat_{m_id}",
+        )
+        btn_txt = "🔄 다시 고쳐서 제출하기" if existing_sub else "✅ 제출하고 결과 확인하기"
+        submitted = st.form_submit_button(btn_txt, type="primary", use_container_width=True)
 
-        notes = st.session_state.get("hq_team_notes", {})
-        with st.form("team_collab_form", clear_on_submit=False):
-            my_sum = st.text_area(
-                "1단계 · 나의 개인 판단 및 근거 요약",
-                value=notes.get("my_summary") or auto_my_summary,
-                placeholder="미션 1~3에서 내가 세운 핵심 판단 근거가 자동으로 채워지거나 직접 요약할 수 있습니다.",
-                height=85,
-            )
-            peer_comp = st.text_area(
-                "2단계 · 팀원과 근거 비교 (나와 같았던 점 / 팀원이 새롭게 제시한 임상 단서)",
-                value=notes.get("peer_comparison", ""),
-                placeholder="예: 나는 손 위생 시간(40~60초)만 생각했는데, 팀원은 주변 환자와의 거리(1~2m 확보) 단서를 추가로 짚어주었다.",
-                height=85,
-            )
-            team_conc = st.text_area(
-                "3단계 · 우리 팀의 공동 해결안 (최종 간호 우선순위 결론)",
-                value=notes.get("team_conclusion", ""),
-                placeholder="예: 1순위 의료진·환자 마스크 착용 및 거리 분리 → 2순위 활력징후 사정 → 3순위 규정 소독제 사용 및 손상성 폐기물 즉시 폐기",
-                height=85,
-            )
-            team_rat = st.text_area(
-                "4단계 · 팀 공동 해결안의 핵심 근거",
-                value=notes.get("team_rationale", ""),
-                placeholder="표준주의와 비말주의 지침에 따라 감염원의 탈출과 침입 경로를 동시에 차단하기 위함이다.",
-                height=75,
-            )
-            thought_chg = st.text_area(
-                "5단계 · 팀 토의 후 바뀐 나의 생각 (성장 성찰)",
-                value=notes.get("thought_change", ""),
-                placeholder="예: 처치 속도보다 환자와 의료진 모두의 안전 보호구·폐기물 원칙이 먼저라는 점을 명확히 깨달았다.",
-                height=75,
-            )
-            save_team = st.form_submit_button("💾 팀 공동 해결안 저장 및 협업 역량 기록하기", type="primary", use_container_width=True)
+    if submitted:
+        evaluate_mission_submission(mission, selected_option, rationale_input)
+        st.rerun()
 
-        if save_team:
-            if not team_conc.strip() or not team_rat.strip():
-                st.warning("팀 공동 해결안(결론)과 핵심 근거를 입력해 주세요.")
-            else:
-                st.session_state["hq_team_notes"] = {
-                    "my_summary": my_sum.strip(),
-                    "peer_comparison": peer_comp.strip(),
-                    "team_conclusion": team_conc.strip(),
-                    "team_rationale": team_rat.strip(),
-                    "thought_change": thought_chg.strip(),
-                    "saved_at": "방금 저장됨",
-                }
-                award_action_once(
-                    action_key=f"team_collab:{scenario['scenario_id']}",
-                    action_type="협력학습 완료",
-                    label=f"[{scenario['title']}] 팀 근거 비교 및 공동 해결안 작성 완료",
-                    xp_gain=40,
-                    badge_id="team_collaborator",
-                )
-                st.success("팀 공동 해결안이 저장되었으며 '협력적 문제해결 팀원' 역량이 기록되었습니다!")
-                st.rerun()
-
-    with col_right:
-        st.subheader("🏅 나의 성장 기록 및 역량 배지")
-        earned = st.session_state.get("hq_earned_badges", [])
-        for b_id, b_info in BADGE_DEFINITIONS.items():
-            is_unlocked = b_id in earned
-            badge_style = "hq-card-selected" if is_unlocked else "hq-card"
-            icon_txt = "🏅 획득 완료" if is_unlocked else "🔒 미획득"
+    # [카드 3] 제출 후에만 나타나는 심플 결과 & 다음 단계 버튼
+    sub = st.session_state["hq_submissions"].get(m_id)
+    if sub:
+        if sub["is_correct"]:
             st.markdown(
                 f"""
-                <div class="{badge_style}" style="padding:0.75rem 1rem; margin-bottom:0.55rem;">
-                    <div style="font-size:0.8rem; font-weight:600; color:#0F766E;">{icon_txt} · {b_info['competency']}</div>
-                    <div style="font-weight:700; font-size:0.95rem;">{b_info['title']}</div>
-                    <div style="font-size:0.83rem; color:#475569;">{b_info['desc']}</div>
+                <div class="hq-card-selected">
+                    <span class="hq-badge-teal">정답입니다! (+성취 점수 획득)</span>
+                    <h4 style="margin:0.35rem 0; color:#0F766E;">🎉 정확한 판단이에요! ({sub['selected_idx'] + 1}번 선택)</h4>
+                    <p style="font-size:0.95rem; margin-bottom:0.4rem;">
+                        <b>핵심 해설</b>: {mission['option_explanations'][sub['selected_idx']]}
+                    </p>
+                    <p style="font-size:0.88rem; color:#334155; margin-bottom:0;">
+                        📝 <b>내가 적은 이유</b>: "{sub['rationale'] if sub['rationale'] else '(이유를 한 줄 적어보면 배지를 받을 수 있어요!)'}"
+                        <br><span style="color:#0F766E;">→ {sub['rationale_status']}</span>
+                    </p>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"""
+                <div class="hq-card-coral">
+                    <span class="hq-badge-coral">다시 한번 생각해 볼까요? (감점 없음)</span>
+                    <h4 style="margin:0.35rem 0;">🧭 아까워요! 놓친 단서를 확인하고 다시 도전해 보세요</h4>
+                    <p style="font-size:0.93rem; margin-bottom:0.4rem;">
+                        • <b>방금 고른 보기 설명</b>: {mission['option_explanations'][sub['selected_idx']]}
+                    </p>
+                    <p style="font-size:0.93rem; background:#FFFFFF; padding:0.7rem 0.9rem; border-radius:10px; margin-bottom:0;">
+                        💡 <b>다시 생각할 힌트</b>: {mission['missed_clue_guide']}
+                        <br>위에서 다른 번호를 고르고 <b>[🔄 다시 고쳐서 제출하기]</b>를 눌러보세요!
+                    </p>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
 
-        st.markdown("#### 📜 행동 기반 성장 로그 (중복 지급 방지 적용)")
-        logs = st.session_state.get("hq_growth_log", [])
-        if logs:
-            for item in reversed(logs[-8:]):
-                st.markdown(f"- `{item['timestamp']}` **[{item['type']}]** {item['label']} *(+{item['xp']} pt)*")
+        with st.expander("📖 1~4번 모든 보기 해설과 참고 출처 보기"):
+            for idx, exp_text in enumerate(mission["option_explanations"]):
+                prefix = "✅ [정답] " if idx == mission["correct_index"] else f"• [{idx + 1}번] "
+                st.markdown(f"**{prefix}{mission['options'][idx]}**\n  - {exp_text}")
+            st.caption(f"📚 참고 출처: {mission['reference_source']}")
+
+        # 한 줄 성찰 & 다음 미션 바로가기 버튼
+        with st.form(key=f"ref_form_{m_id}", clear_on_submit=False):
+            ref_val = st.text_input(
+                f"💭 오늘의 한 줄 다짐: {mission['reflection_prompt']}",
+                value=existing_ref,
+                placeholder="내가 느낀 점을 짧게 한 줄로 적어보세요.",
+            )
+            ref_saved = st.form_submit_button("💾 한 줄 다짐 저장하기 (+20점)", type="secondary")
+        if ref_saved and ref_val.strip():
+            save_mission_reflection(mission, ref_val)
+            st.toast("한 줄 다짐이 저장되었어요!")
+            st.rerun()
+
+        # 다음 미션 이동 버튼 (가장 눈에 띄게!)
+        if active_idx < len(missions) - 1:
+            if st.button(f"👉 미션 {active_idx + 1} 완료! 다음 [미션 {active_idx + 2}]로 넘어가기 →", type="primary", use_container_width=True):
+                st.session_state["hq_active_mission_idx"] = active_idx + 1
+                st.rerun()
         else:
-            st.caption("아직 기록된 학습 행동이 없습니다. 미션 제출이나 근거 작성을 시작해 보세요!")
+            if st.button("🏆 미션 3개 완료! [4단계: 모둠 정리 & 활동지 출력]으로 가기 →", type="primary", use_container_width=True):
+                st.session_state["hq_nav_view"] = "🏆 4단계: 활동지 저장·인쇄"
+                st.rerun()
 
-        st.markdown("---")
-        st.markdown("#### 📥 학습 결과 파일 다운로드 (영구 보관용)")
-        export_data = build_quest_export_payload()
-        json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
-        txt_lines = [
-            f"[{export_data['site_title']}] 학습 및 협력학습 결과 보고서",
-            f"- 단원: {export_data['selected_unit']}",
-            f"- 선택 실습 상황: {export_data['selected_scenario']}",
-            f"- 미션 진행률: {export_data['progress']} / 성취 점수: {export_data['xp']} pt",
-            f"- 획득 배지: {', '.join(export_data['earned_badges']) if export_data['earned_badges'] else '없음'}",
-            "",
-            "[미션별 제출 근거 및 평가]",
-        ]
-        for mid, sdata in export_data["mission_submissions"].items():
-            txt_lines.append(
-                f"- {mid}: 선택={sdata['selected_idx']+1}번 ({'정답' if sdata['is_correct'] else '재도전 필요'}) | 근거={sdata['rationale']} | 상태={sdata['teacher_review_status']}"
-            )
-        txt_lines.append("\n[팀 공동 해결안]")
-        tn = export_data["team_collaboration"]
-        txt_lines.append(f"- 팀 결론: {tn.get('team_conclusion', '')}")
-        txt_lines.append(f"- 팀 근거: {tn.get('team_rationale', '')}")
-        txt_lines.append(f"- 토의 후 바뀐 생각: {tn.get('thought_change', '')}")
 
-        d_col1, d_col2 = st.columns(2)
-        with d_col1:
-            st.download_button(
-                "📥 전체 결과 저장 (JSON)",
-                data=json_str,
-                file_name="health_quest_learning_record.json",
-                mime="application/json",
-                use_container_width=True,
-            )
-        with d_col2:
-            st.download_button(
-                "📄 제출용 요약본 (TXT)",
-                data="\n".join(txt_lines),
-                file_name="health_quest_learning_record.txt",
-                mime="text/plain",
-                use_container_width=True,
-            )
+# =========================================================
+# 4단계: 모둠 정리 & 한눈에 보는 수업 활동지 저장·인쇄
+# =========================================================
+def _build_printable_activity_sheet_html(student_name: str, group_name: str) -> str:
+    """중·고등학생이 바로 인쇄하거나 파일로 열어볼 수 있는 깔끔한 HTML 수업 활동지 생성."""
+    unit_name = st.session_state.get("hq_selected_unit", "")
+    scenario = get_current_scenario_data()
+    completed, total, _ = get_scenario_progress(scenario)
+    xp = st.session_state.get("hq_xp", 0)
+    earned = [BADGE_DEFINITIONS[b]["title"] for b in st.session_state.get("hq_earned_badges", []) if b in BADGE_DEFINITIONS]
+    notes = st.session_state.get("hq_team_notes", {})
 
+    rows_html = ""
+    for m in scenario["missions"]:
+        sub = st.session_state["hq_submissions"].get(m["id"])
+        ref = st.session_state["hq_reflections"].get(m["id"], "-")
+        if sub:
+            choice_str = f"{sub['selected_idx'] + 1}번. {html.escape(sub['selected_text'])}"
+            status_str = "정답 확인 완료" if sub["is_correct"] else "재도전 진행 중"
+            rat_str = html.escape(sub["rationale"]) if sub["rationale"] else "-"
+        else:
+            choice_str = "(미작성)"
+            status_str = "미제출"
+            rat_str = "-"
+
+        rows_html += f"""
+        <tr>
+            <td style="font-weight:700;">미션 {m['step_num']}<br><span style="font-size:12px;color:#0F766E;">({status_str})</span></td>
+            <td><b>{html.escape(m['title'])}</b><br><span style="font-size:13px;">선택: {choice_str}</span></td>
+            <td>{rat_str}</td>
+            <td>{html.escape(ref)}</td>
+        </tr>
+        """
+
+    return f"""<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>보건간호 미션 수업 활동지</title>
+<style>
+    body {{ font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; color: #1B2A4A; background: #FFFFFF; margin: 24px; line-height: 1.55; }}
+    .sheet-box {{ max-width: 820px; margin: 0 auto; border: 2px solid #0D9488; border-radius: 14px; padding: 24px 28px; }}
+    h1 {{ margin: 0 0 6px 0; font-size: 22px; color: #0F766E; }}
+    .meta {{ background: #F0FDFA; border: 1px solid #99F6E4; border-radius: 10px; padding: 12px 16px; margin: 12px 0 18px 0; font-size: 14px; }}
+    h2 {{ font-size: 16px; color: #14223D; border-bottom: 2px solid #E2E8F0; padding-bottom: 6px; margin-top: 20px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 13.5px; }}
+    th, td {{ border: 1px solid #CBD5E1; padding: 10px; text-align: left; vertical-align: top; }}
+    th {{ background: #F8FAFC; color: #14223D; }}
+    .team-box {{ background: #FAF8F5; border: 1px solid #E5E0D5; border-radius: 10px; padding: 14px 16px; font-size: 14px; }}
+    .print-btn {{ background: #0D9488; color: #FFFFFF; border: none; border-radius: 8px; padding: 10px 18px; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: 14px; }}
+    @media print {{ .no-print {{ display: none !important; }} body {{ margin: 0; }} }}
+</style>
+</head>
+<body>
+<div class="sheet-box">
+    <div class="no-print" style="text-align:right;">
+        <button class="print-btn" onclick="window.print()">🖨️ 지금 바로 인쇄 / PDF로 저장하기</button>
+    </div>
+    <h1>🩺 {html.escape(SITE_CONFIG['site_title'])} — 수업 결과 활동지</h1>
+    <div class="meta">
+        <b>• 작성자(이름/학번)</b>: {html.escape(student_name or '미입력')} &nbsp;&nbsp;|&nbsp;&nbsp;
+        <b>• 모둠명</b>: {html.escape(group_name or '미입력')}<br>
+        <b>• 실습 단원</b>: {html.escape(unit_name)} &nbsp;&nbsp;|&nbsp;&nbsp;
+        <b>• 선택한 실습 상황</b>: {html.escape(scenario['title'])}<br>
+        <b>• 미션 완료 현황</b>: {completed} / {total}개 완료 (성장 점수: {xp}점) &nbsp;&nbsp;|&nbsp;&nbsp;
+        <b>• 획득 배지</b>: {html.escape(', '.join(earned) if earned else '도전 중')}
+    </div>
+
+    <h2>1. 나의 단계별 미션 판단 및 근거 기록</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width:14%;">단계</th>
+                <th style="width:34%;">미션 주제 및 나의 선택</th>
+                <th style="width:28%;">내가 작성한 판단 이유(근거)</th>
+                <th style="width:24%;">오늘의 한 줄 다짐(성찰)</th>
+            </tr>
+        </thead>
+        <tbody>
+            {rows_html}
+        </tbody>
+    </table>
+
+    <h2>2. 모둠 친구와 생각 비교 및 공동 해결안</h2>
+    <div class="team-box">
+        <p style="margin:4px 0;"><b>① 친구와 비교해 본 생각 차이</b>: {html.escape(notes.get('peer_comparison') or '-')}</p>
+        <p style="margin:4px 0;"><b>② 우리 모둠이 정한 최종 해결 방법과 이유</b>: {html.escape(notes.get('team_conclusion') or '-')}</p>
+        <p style="margin:4px 0;"><b>③ 토의 후 새로 깨닫거나 바뀐 나의 생각</b>: {html.escape(notes.get('thought_change') or '-')}</p>
+    </div>
+</div>
+</body>
+</html>"""
+
+
+def render_collaboration_and_growth():
+    scenario = get_current_scenario_data()
+
+    render_simple_guide(
+        now_do="모둠 친구와 생각을 비교해 짧은 3칸만 채운 뒤, [🖨️ 수업 활동지 바로 인쇄 / 파일 저장]을 눌러 제출하세요!",
+        why_do="내 생각과 친구 생각을 합쳐 정리한 결과가 깔끔한 '수업 활동지' 표로 자동 완성되어 바로 인쇄하거나 제출할 수 있어요.",
+    )
+
+    notes = st.session_state.get("hq_team_notes", {})
+    student_name = st.session_state.get("hq_student_label", "")
+    group_name = st.session_state.get("hq_group_label", "")
+
+    # 1) 심플한 3문항 모둠 정리 폼
+    st.subheader("1️⃣ 모둠 토의 3줄 정리하기")
+    with st.form("simple_team_form", clear_on_submit=False):
+        c_info1, c_info2 = st.columns(2)
+        with c_info1:
+            s_name_in = st.text_input("이름 또는 학번 (활동지 표시용)", value=student_name, placeholder="예: 2학년 1반 홍길동")
+        with c_info2:
+            g_name_in = st.text_input("모둠 이름 (선택)", value=group_name, placeholder="예: 나이팅게일 1모둠")
+
+        peer_comp = st.text_input(
+            "① 친구의 생각과 내 생각은 어떤 점이 같거나 달랐나요?",
+            value=notes.get("peer_comparison", ""),
+            placeholder="예: 나는 손 씻기만 생각했는데 친구는 환자 간 거리 두기까지 이야기해 주었다.",
+        )
+        team_conc = st.text_input(
+            "② 우리 모둠이 정한 '가장 중요한 안전 행동 1순위'와 이유는 무엇인가요?",
+            value=notes.get("team_conclusion", ""),
+            placeholder="예: 마스크 착용과 손 위생을 가장 먼저 해야 감염이 퍼지는 것을 막을 수 있다.",
+        )
+        thought_chg = st.text_input(
+            "③ 오늘 수업을 마치고 새롭게 알게 된 점 한 줄!",
+            value=notes.get("thought_change", ""),
+            placeholder="예: 바빠도 보호구 착용과 바늘 버리기 원칙을 절대 건너뛰면 안 된다고 느꼈다.",
+        )
+        save_btn = st.form_submit_button("✨ 작성 완료! 아래에 내 수업 활동지 만들기", type="primary", use_container_width=True)
+
+    if save_btn:
+        st.session_state["hq_student_label"] = s_name_in.strip()
+        st.session_state["hq_group_label"] = g_name_in.strip()
+        st.session_state["hq_team_notes"] = {
+            "peer_comparison": peer_comp.strip(),
+            "team_conclusion": team_conc.strip(),
+            "team_rationale": team_conc.strip(),
+            "thought_change": thought_chg.strip(),
+            "saved_at": "저장 완료",
+        }
+        if team_conc.strip():
+            award_action_once(
+                action_key=f"team_collab:{scenario['scenario_id']}",
+                action_type="모둠 정리 완료",
+                label=f"[{scenario['title']}] 모둠 토의 및 활동지 작성 완료",
+                xp_gain=40,
+                badge_id="team_collaborator",
+            )
+        st.success("수업 활동지가 완성되었습니다! 아래에서 바로 인쇄하거나 파일로 저장해 보세요.")
+        st.rerun()
+
+    st.markdown("---")
+
+    # 2) 완성된 수업 활동지 미리보기 & 원클릭 인쇄 / 저장
+    st.subheader("2️⃣ 완성된 나의 수업 활동지 (인쇄 및 파일 저장)")
+    st.caption("※ 창을 닫거나 새로고침하면 작성한 내용이 지워질 수 있으니, 지금 바로 아래 버튼으로 인쇄하거나 파일로 저장해 두세요!")
+
+    sheet_html = _build_printable_activity_sheet_html(
+        st.session_state.get("hq_student_label", ""),
+        st.session_state.get("hq_group_label", ""),
+    )
+
+    btn_col1, btn_col2 = st.columns(2)
+    with btn_col1:
+        st.download_button(
+            label="📥 선생님께 제출할 수업 활동지 파일 저장하기 (.html)",
+            data=sheet_html,
+            file_name="나의_보건미션_수업활동지.html",
+            mime="text/html",
+            type="primary",
+            use_container_width=True,
+        )
+    with btn_col2:
+        # 활동지 텍스트 파일도 쉬운 이름으로 제공
+        simple_txt = (
+            f"[{SITE_CONFIG['site_title']} - 수업 활동지]\n"
+            f"이름/학번: {st.session_state.get('hq_student_label', '미입력')} | 모둠: {st.session_state.get('hq_group_label', '미입력')}\n"
+            f"실습 상황: {scenario['title']}\n\n"
+            f"1) 친구와 생각 비교: {st.session_state['hq_team_notes'].get('peer_comparison', '-')}\n"
+            f"2) 우리 모둠 최종 결론과 이유: {st.session_state['hq_team_notes'].get('team_conclusion', '-')}\n"
+            f"3) 오늘 새로 깨달은 점: {st.session_state['hq_team_notes'].get('thought_change', '-')}\n"
+        )
+        st.download_button(
+            label="📝 메모장으로 열리는 간단 활동지 저장하기 (.txt)",
+            data=simple_txt,
+            file_name="나의_보건미션_수업활동지.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+    # 화면 안에서 활동지 표를 그대로 보여주고 [🖨️ 지금 바로 인쇄 / PDF로 저장하기] 버튼이 작동하는 내장 뷰어
+    components.html(sheet_html, height=620, scrolling=True)
