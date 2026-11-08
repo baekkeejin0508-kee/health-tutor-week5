@@ -2,17 +2,7 @@
 HEALTH QUEST — 예비 보건의료인의 미션룸 (스마트 디지털 보건간호 PBL 학습지 플랫폼)
 - 수업 흐름: 단원 질문(2~3개) & AI 피드백 → 수준별 모의실습 3개(기초·중급·심화) 개인 PBL 서술 & AI 개인 피드백 → 팀별 협력 서술 & AI 팀 피드백 → 교사 최종 피드백 및 학습지 출력
 """
-import importlib
 import streamlit as st
-import quest_data
-import quest_engine
-import quest_ui
-
-# 코드 수정 시 Streamlit 런타임에 즉시 반영되도록 핫 리로드 적용
-importlib.reload(quest_data)
-importlib.reload(quest_engine)
-importlib.reload(quest_ui)
-
 from quest_data import SITE_CONFIG, UNIT_CATALOG
 from quest_engine import init_quest_state
 from quest_ui import (
@@ -57,6 +47,11 @@ if current_nav not in NAV_OPTIONS:
     current_nav = NAV_OPTIONS[0]
     st.session_state["hq_nav_view"] = current_nav
 
+
+def _on_sidebar_nav_change():
+    st.session_state["hq_nav_view"] = st.session_state["hq_sidebar_nav_radio"]
+
+
 # ---------------------------------------------------------
 # 사이드바 구성 (전 교과서 과목·단원 선택 및 수업 단계 이동)
 # ---------------------------------------------------------
@@ -89,6 +84,10 @@ with st.sidebar:
     cur_unit = st.session_state.get("hq_selected_unit", filtered_units[0])
     if cur_unit not in filtered_units:
         cur_unit = filtered_units[0]
+        st.session_state["hq_selected_unit"] = cur_unit
+        st.session_state["hq_selected_scenario_id"] = UNIT_CATALOG[cur_unit]["scenarios"][0]["scenario_id"]
+        st.session_state["hq_active_mission_idx"] = 0
+        st.session_state["hq_selected_term_idx"] = 0
 
     chosen_unit = st.selectbox(
         "학습할 단원 선택",
@@ -104,14 +103,14 @@ with st.sidebar:
         st.rerun()
 
     st.markdown("<hr style='margin: 0.75rem 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
-    selected_nav = st.radio(
+    # 상단/하단 버튼으로 이동한 단계와 사이드바 라디오 버튼을 완벽히 동기화
+    st.session_state["hq_sidebar_nav_radio"] = st.session_state["hq_nav_view"]
+    st.radio(
         "2. 수업 진행 단계",
         NAV_OPTIONS,
-        index=NAV_OPTIONS.index(current_nav),
+        key="hq_sidebar_nav_radio",
+        on_change=_on_sidebar_nav_change,
     )
-    if selected_nav != current_nav:
-        st.session_state["hq_nav_view"] = selected_nav
-        st.rerun()
 
     st.markdown("<hr style='margin: 0.75rem 0; border-color: #E2E8F0;'>", unsafe_allow_html=True)
     reduce_motion_val = st.toggle(
