@@ -1,7 +1,13 @@
-"""HEALTH QUEST — 스마트 디지털 보건간호 PBL 학습지: 상태 관리·진도율 계산·AI 보건튜터(질문/개인/팀) 및 교사 피드백 엔진."""
+"""HEALTH QUEST — 스마트 디지털 보건간호 PBL 학습지: 상태 관리·진도율 계산·AI 보건튜터(질문/개인/팀)·교사 피드백 및 학생 제출물 관리 엔진."""
+import csv
+import io
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 import streamlit as st
 from quest_data import UNIT_CATALOG
+
+SUBMISSIONS_STORE_PATH = Path(__file__).resolve().parent / "submissions_store.json"
 
 BADGE_DEFINITIONS = {
     "question_explorer": {
@@ -50,10 +56,12 @@ def init_quest_state():
         "hq_selected_scenario_id": first_scen_id,
         "hq_active_mission_idx": 0,  # 0: 기초, 1: 중급, 2: 심화
         "hq_reduce_motion": False,
+        "hq_sound_enabled": True,
+        "hq_pending_sound": None,
         "hq_selected_term_idx": 0,
         # 1단계: 학생 질문 2~3개 및 AI 피드백, 모의실습 3단계 생성 여부
         "hq_unit_questions": [],  # unit별 질문·피드백 리스트
-        "hq_scenarios_generated": {},  # unit_name -> bool (질문 기반 모의실습 3개 제시 완료 여부)
+        "hq_scenarios_generated": {},  # unit_name -> bool
         # 2~3단계: 기초·중급·심화 개인별 제출 및 AI 개인 피드백
         "hq_submissions": {},  # mission_id -> submission dict (ai_individual_feedback 포함)
         "hq_reflections": {},  # mission_id -> str
@@ -69,6 +77,8 @@ def init_quest_state():
             "teacher_feedback": "",
             "saved_at": "",
         },
+        # 교사용 학생 제출 보고서 목록 (세션 + 로컬 파일 연동)
+        "hq_submitted_reports": [],
         # 보상 및 진도 기록
         "hq_rewarded_keys": [],
         "hq_earned_badges": [],
@@ -108,10 +118,7 @@ def get_unit_questions_for_current() -> list[dict]:
 
 
 def get_scenario_progress(scenario: dict) -> tuple[int, int, float]:
-    """
-    기초·중급·심화 3단계 모의실습 완료 개수 및 전체 학습 진도율(0.0~1.0) 반환.
-    - 학생이 미션을 제출하는 즉시 완료 개수와 진도율이 반영되도록 개선.
-    """
+    """기초·중급·심화 3단계 모의실습 완료 개수 및 전체 학습 진도율(0.0~1.0) 반환."""
     missions = scenario.get("missions", [])
     total = len(missions)
     completed_missions = 0
@@ -124,7 +131,6 @@ def get_scenario_progress(scenario: dict) -> tuple[int, int, float]:
             if sub.get("is_correct"):
                 correct_missions += 1
 
-    # 전체 5단계 가중 진도율 계산 (질문 20% + 실습생성 10% + 기초/중급/심화 55% + 팀/교사피드백 15%)
     unit_name = st.session_state.get("hq_selected_unit", "")
     has_questions = len(get_unit_questions_for_current()) >= 1
     has_generated = bool(st.session_state.get("hq_scenarios_generated", {}).get(unit_name))
@@ -138,7 +144,6 @@ def get_scenario_progress(scenario: dict) -> tuple[int, int, float]:
     if has_generated:
         pct += 0.10
     if total > 0:
-        # 미션 제출 시 개당 12%, 정답+서술 시 추가 6.3% (3개 합산 약 55%)
         pct += (completed_missions / total) * 0.35 + (correct_missions / total) * 0.20
     if has_team:
         pct += 0.08
@@ -146,7 +151,6 @@ def get_scenario_progress(scenario: dict) -> tuple[int, int, float]:
         pct += 0.07
 
     pct = min(1.0, round(pct, 2))
-    # 만약 3개 미션을 모두 제출했다면 최소 75% 이상 표시 보장
     if completed_missions == total and total > 0 and pct < 0.75:
         pct = 0.75
     if completed_missions == total and has_team and has_teacher:
@@ -253,7 +257,6 @@ def submit_student_questions_and_get_feedback(
     if not valid_qs:
         return []
 
-    # 기존 다른 단원 질문은 유지하고 현재 단원 질문은 최신 입력으로 갱신
     other_unit_qs = [item for item in st.session_state.get("hq_unit_questions", []) if item.get("unit_name") != unit_name]
     new_entries = []
     for idx, q_str in enumerate(valid_qs, start=1):
@@ -270,6 +273,7 @@ def submit_student_questions_and_get_feedback(
 
     st.session_state["hq_unit_questions"] = other_unit_qs + new_entries
     st.session_state["hq_scenarios_generated"][unit_name] = True
+    st.session_state["hq_pending_sound"] = "chime"
 
     award_action_once(
         action_key=f"unit_questions:{unit_name}",
@@ -282,10 +286,7 @@ def submit_student_questions_and_get_feedback(
 
 
 def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str) -> dict:
-    """
-    기초·중급·심화 각 모의실습에 대한 학생의 개인별 선택 + 자기주도 PBL 서술 평가 및
-    AI 보건튜터 개인별 피드백 생성.
-    """
+    """기초·중급·심화 각 모의실습에 대한 학생의 개인별 선택 + 자기주도 PBL 서술 평가 및 AI 보건튜터 개인별 피드백 생성."""
     m_id = mission["id"]
     prev_sub = st.session_state["hq_submissions"].get(m_id)
     attempts = (prev_sub["attempts"] + 1) if prev_sub else 1
@@ -296,7 +297,6 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
     keywords = mission.get("required_keywords", [])
     matched_kw = [kw for kw in keywords if kw in clean_rationale]
 
-    # AI 보건튜터 개인별 맞춤 피드백 생성
     level_label = mission.get("level_label", f"미션 {mission.get('step_num', 1)}")
     selected_exp = mission["option_explanations"][selected_idx]
     correct_opt_text = mission["options"][mission["correct_index"]]
@@ -342,8 +342,8 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
         "attempts": attempts,
     }
     st.session_state["hq_submissions"][m_id] = result
+    st.session_state["hq_pending_sound"] = "success" if is_correct else "try_again"
 
-    # 단계별 보상 및 배지 지급
     step_num = mission.get("step_num", 1)
     award_action_once(
         action_key=f"mission_submit:{m_id}",
@@ -365,6 +365,7 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
         )
         if newly_done:
             st.session_state["hq_pending_celebration"] = scenario["title"]
+            st.session_state["hq_pending_sound"] = "fanfare"
 
     return result
 
@@ -400,6 +401,7 @@ def submit_team_collaboration_and_get_feedback(
         "teacher_feedback": existing_teacher_fb,
         "saved_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
     }
+    st.session_state["hq_pending_sound"] = "chime"
 
     award_action_once(
         action_key=f"team_collab:{scenario['scenario_id']}",
@@ -429,6 +431,7 @@ def generate_or_save_teacher_feedback(custom_teacher_comment: str = "") -> str:
         )
 
     st.session_state["hq_team_notes"]["teacher_feedback"] = teacher_fb
+    st.session_state["hq_pending_sound"] = "fanfare"
     award_action_once(
         action_key=f"teacher_feedback:{scenario['scenario_id']}",
         action_type="교사 최종 피드백 확인",
@@ -449,3 +452,155 @@ def save_mission_reflection(mission: dict, reflection_text: str):
             label=f"[{mission['title']}] 성찰 질문 작성 완료",
             xp_gain=15,
         )
+
+
+# ==============================================================================
+# 교사용 학생 제출 보고서 통합 관리함 (로컬 JSON 저장소 + 세션 연동 + 엑셀 CSV 내보내기)
+# ==============================================================================
+def load_submitted_reports() -> list[dict]:
+    """저장된 학생 제출 보고서 목록을 불러옵니다 (.gitignore로 보호되어 깃허브에 노출되지 않음)."""
+    records: list[dict] = []
+    if SUBMISSIONS_STORE_PATH.exists():
+        try:
+            raw = json.loads(SUBMISSIONS_STORE_PATH.read_text(encoding="utf-8"))
+            if isinstance(raw, list):
+                records = raw
+        except Exception:
+            records = []
+
+    session_records = st.session_state.get("hq_submitted_reports", [])
+    existing_ids = {r.get("report_id") for r in records if r.get("report_id")}
+    for sr in session_records:
+        if sr.get("report_id") not in existing_ids:
+            records.append(sr)
+
+    st.session_state["hq_submitted_reports"] = records
+    return records
+
+
+def submit_final_report_to_teacher() -> dict:
+    """학생이 작성한 질문·기초/중급/심화 서술·팀 협력·피드백 전체를 교사용 제출함에 등록합니다."""
+    unit_name = st.session_state.get("hq_selected_unit", "")
+    unit_data = get_current_unit_data()
+    scenario = get_current_scenario_data()
+    missions = scenario.get("missions", [])
+    subs = st.session_state.get("hq_submissions", {})
+    notes = st.session_state.get("hq_team_notes", {})
+    qs = get_unit_questions_for_current()
+    completed, total, pct = get_scenario_progress(scenario)
+
+    if not notes.get("teacher_feedback"):
+        generate_or_save_teacher_feedback()
+        notes = st.session_state.get("hq_team_notes", {})
+        completed, total, pct = get_scenario_progress(scenario)
+
+    student_name = st.session_state.get("hq_student_label", "").strip() or "이름미입력_학생"
+    group_name = st.session_state.get("hq_group_label", "").strip() or "기본모둠"
+    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    q_summary = " | ".join([f"Q{q['q_num']}: {q['question']}" for q in qs]) if qs else "(질문 미입력)"
+
+    m_texts = []
+    for idx in range(3):
+        if idx < len(missions):
+            m = missions[idx]
+            sub = subs.get(m["id"])
+            if sub:
+                m_texts.append(f"[{sub['selected_idx']+1}번 선택] {sub.get('rationale') or '(서술 없음)'}")
+            else:
+                m_texts.append("(미제출)")
+        else:
+            m_texts.append("-")
+
+    report_entry = {
+        "report_id": f"{student_name}_{unit_data.get('unit_id', 'u')}_{datetime.now().strftime('%H%M%S')}",
+        "submitted_at": now_str,
+        "student_name": student_name,
+        "group_name": group_name,
+        "subject": unit_data.get("subject", "보건간호"),
+        "unit_name": unit_name,
+        "progress_pct": int(pct * 100),
+        "xp": st.session_state.get("hq_xp", 0),
+        "questions_summary": q_summary,
+        "basic_mission": m_texts[0],
+        "inter_mission": m_texts[1],
+        "adv_mission": m_texts[2],
+        "individual_summary": notes.get("individual_summary", ""),
+        "peer_comparison": notes.get("peer_comparison", ""),
+        "team_conclusion": notes.get("team_conclusion", ""),
+        "thought_change": notes.get("thought_change", ""),
+        "ai_team_feedback": notes.get("ai_team_feedback", ""),
+        "teacher_feedback": notes.get("teacher_feedback", ""),
+    }
+
+    all_reports = load_submitted_reports()
+    # 동일 학생·동일 단원이면 최신본으로 업데이트하거나 추가
+    updated = False
+    for i, r in enumerate(all_reports):
+        if r.get("student_name") == student_name and r.get("unit_name") == unit_name:
+            all_reports[i] = report_entry
+            updated = True
+            break
+    if not updated:
+        all_reports.append(report_entry)
+
+    st.session_state["hq_submitted_reports"] = all_reports
+    try:
+        SUBMISSIONS_STORE_PATH.write_text(
+            json.dumps(all_reports, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+    st.session_state["hq_pending_sound"] = "fanfare"
+    return report_entry
+
+
+def export_submitted_reports_csv() -> bytes:
+    """교사가 모든 학생의 제출 보고서를 한 번에 엑셀(CSV, UTF-8-BOM)로 다운로드할 수 있도록 변환합니다."""
+    records = load_submitted_reports()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(
+        [
+            "제출일시",
+            "학번/이름",
+            "모둠명",
+            "교과목",
+            "학습단원",
+            "진도율(%)",
+            "성취점수(XP)",
+            "학생 질문(2~3개)",
+            "기초 모의실습(개인서술)",
+            "중급 모의실습(개인서술)",
+            "심화 모의실습(개인서술)",
+            "팀원 의견 비교",
+            "팀 최종 해결안",
+            "토의 후 성찰",
+            "AI 팀 피드백",
+            "교사 최종 피드백",
+        ]
+    )
+    for r in records:
+        writer.writerow(
+            [
+                r.get("submitted_at", ""),
+                r.get("student_name", ""),
+                r.get("group_name", ""),
+                r.get("subject", ""),
+                r.get("unit_name", ""),
+                r.get("progress_pct", 0),
+                r.get("xp", 0),
+                r.get("questions_summary", ""),
+                r.get("basic_mission", ""),
+                r.get("inter_mission", ""),
+                r.get("adv_mission", ""),
+                r.get("peer_comparison", ""),
+                r.get("team_conclusion", ""),
+                r.get("thought_change", ""),
+                r.get("ai_team_feedback", "").replace("\n", " "),
+                r.get("teacher_feedback", "").replace("\n", " "),
+            ]
+        )
+    return output.getvalue().encode("utf-8-sig")

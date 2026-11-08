@@ -36,6 +36,9 @@ HealthCoach_*.json
 cellulitis_rag_comparison_result.json
 WEEK8_MULTIAGENT_TEST_LOGS.md
 MULTI_AGENT_버전안내.md
+health_quest_all_in_one.py
+health_quest_standalone_preview.html
+submissions_store.json
 
 # OS
 .DS_Store
