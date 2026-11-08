@@ -63,7 +63,8 @@ with st.sidebar:
         index=0,
     )
     vector_store_id = file_vs_id if "PDF" in kb_choice else url_vs_id
-    st.caption(f"연결된 Vector Store: `{vector_store_id}`")
+    masked_vs = f"{vector_store_id[:6]}...****" if vector_store_id else "미설정"
+    st.caption(f"연결된 Vector Store: `{masked_vs}` (보안 마스킹됨)")
 
     if st.button("🔄 새 대화 시작", use_container_width=True):
         st.session_state.user_id = str(uuid.uuid4())

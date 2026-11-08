@@ -2,7 +2,7 @@
 
 - **실행 시각**: 2026-11-04 15:52:15
 - **사용 모델**: `gpt-4.1-mini`
-- **연결된 Vector Store ID**: `vs_6ad59e8eae9081919a57db129940e045`
+- **연결된 Vector Store ID**: `vs_REDACTED_SECRET_ID`
 - **검증 범위**: **버전 A (`app-multiagent.py` 교수님 샘플 스타일)** & **버전 B (`app.py` + `tutor.py` 통합형)** 모두 검증
 
 ---

@@ -5,7 +5,7 @@
   "model": "gpt-4.1-mini",
   "instructions_version": "v2",
   "instructions_hash": "84f2d4121674",
-  "vector_store_id": "vs_6ad59e8eae9081919a57db129940e045",
+  "vector_store_id": "vs_REDACTED_SECRET_ID",
   "timestamp_utc": "2026-10-21T02:14:28.260897+00:00",
   "messages": [
     {

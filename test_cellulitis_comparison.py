@@ -26,8 +26,8 @@ if SECRETS_FILE.exists():
                 if v:
                     os.environ["VECTOR_STORE_FILE_ID"] = v
 
-URL_STORE_ID = os.environ.get("VECTOR_STORE_URL_ID", "vs_6ad8458c601c8191b96326fa84a89fdd")
-FILE_STORE_ID = os.environ.get("VECTOR_STORE_FILE_ID", "vs_6ad59e8eae9081919a57db129940e045")
+URL_STORE_ID = os.environ.get("VECTOR_STORE_URL_ID", "vs_REDACTED_SECRET_ID")
+FILE_STORE_ID = os.environ.get("VECTOR_STORE_FILE_ID", "vs_REDACTED_SECRET_ID")
 
 async def test_cellulitis_mode(mode_name: str, vs_id: str = None):
     print(f"\n=======================================================")
