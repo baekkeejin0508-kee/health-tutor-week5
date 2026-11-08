@@ -248,7 +248,7 @@ def generate_unit_inquiry_feedback(unit_data: dict, student_question: str, stude
 
     if needs_safety_alert:
         safety_note = (
-            "⚠️ **[Safety Reviewer 안전 경계 안내]** 소독제 임의 혼합, 학생 간 침습적 시술(주사·채혈), "
+            "⚠️ **[임상 실습 안전 경계 안내]** 소독제 임의 혼합, 학생 간 침습적 시술(주사·채혈), "
             "실제 환자에 대한 약물 처방·복용량 안내는 환자 안전과 법적 경계에 따라 금지되어 있습니다. "
             "교사 감독하에 마네킹 모형이나 비침습적 관찰·교육 실습으로 안전하게 전환하여 탐구해 봅시다. [교사 검토 필요]"
         )

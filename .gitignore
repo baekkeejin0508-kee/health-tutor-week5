@@ -21,6 +21,22 @@ knowledge_web/
 *.docx
 *.hwp
 
+# 교사용 에이전트 개발과정 및 주차별 테스트 검증 파일 (로컬 컴퓨터에만 보관하고 공개 GitHub에는 미노출)
+app_teacher_lab.py
+app-multiagent.py
+app_mcp.py
+app_week5_backup.py
+run_multiagent_tests.py
+test_cellulitis_comparison.py
+test_rag_comparison.py
+convert_*.py
+create_report_docx.py
+AITutor_*.json
+HealthCoach_*.json
+cellulitis_rag_comparison_result.json
+WEEK8_MULTIAGENT_TEST_LOGS.md
+MULTI_AGENT_버전안내.md
+
 # OS
 .DS_Store
 Thumbs.db
