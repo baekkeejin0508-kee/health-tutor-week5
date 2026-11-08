@@ -1,11 +1,14 @@
-"""HEALTH QUEST — 사설 스마트 디지털 학습지 스타일 UI·UX 모듈 (다채로운 파스텔·그라데이션 컬러, 입체 3D 인터랙티브 버튼, Web Audio 효과음, 교사용 제출물 관리함 포함)."""
+"""HEALTH QUEST — 트렌디 에듀테크 스마트 학습지 UI·UX 모듈
+- 폰트: 네이버 나눔스퀘어라운드(NanumSquareRound, OFL 공공 무료) & 지마켓 산스(GmarketSans, 공공·상업 완전 무료)
+- 특징: 3열 카드 높이 완벽 고정(Pixel-Perfect Equal Height), 간결한 마이크로카피, 입체 3D 버튼 애니메이션, 효과음, 교사용 제출함
+"""
 import html
 import random
+import re
 import streamlit as st
 import streamlit.components.v1 as components
 from quest_data import SITE_CONFIG
 from quest_engine import (
-    BADGE_DEFINITIONS,
     evaluate_mission_submission,
     export_submitted_reports_csv,
     generate_or_save_teacher_feedback,
@@ -15,7 +18,6 @@ from quest_engine import (
     get_step_completion_flags,
     get_unit_questions_for_current,
     load_submitted_reports,
-    save_mission_reflection,
     submit_final_report_to_teacher,
     submit_student_questions_and_get_feedback,
     submit_team_collaboration_and_get_feedback,
@@ -23,16 +25,21 @@ from quest_engine import (
 
 
 def _md_html(raw_html: str):
-    """
-    Markdown의 '4칸 들여쓰기 코드블록(<pre><code>) 변환 버그'를 원천 차단하는 헬퍼 함수.
-    모든 줄의 앞뒤 공백을 제거하고 빈 줄을 없애서 </div>, <h1> 등의 태그가 절대 화면에 노출되지 않게 보장합니다.
-    """
+    """모든 HTML 줄의 앞뒤 공백을 제거하여 마크다운 코드블록(</div> 노출) 버그를 원천 차단합니다."""
     cleaned = "\n".join(line.strip() for line in raw_html.splitlines() if line.strip())
     st.markdown(cleaned, unsafe_allow_html=True)
 
 
+def _clean_mission_title(title: str) -> str:
+    """제목 앞의 중복된 [기초], [중급], [심화] 말머리를 제거해 카드 제목을 깔끔하게 정리합니다."""
+    return re.sub(r"^\[(기초|중급|심화)\]\s*", "", (title or "").strip())
+
+
 def inject_quest_css(reduce_motion: bool = False):
-    """사설 스마트 디지털 학습지(아이스크림·엘리하이·밀크T 감성) 컬러 팔레트 및 입체 인터랙션 CSS (외부 CDN 블로킹 제거로 즉시 렌더링)."""
+    """
+    공공·교육 현장에서 저작권 걱정 없이 100% 무료로 사용 가능한
+    '네이버 나눔스퀘어라운드(OFL 1.1)'와 '지마켓 산스(무료 공개 라이선스)'를 적용한 트렌디 디지털 학습지 스타일.
+    """
     motion_css = (
         """
         *, *::before, *::after {
@@ -49,49 +56,64 @@ def inject_quest_css(reduce_motion: bool = False):
     _md_html(
         f"""
         <style>
+        /* 공공 무료 저작권 안심 폰트 1: 네이버 나눔스퀘어라운드 (OFL 1.1 라이선스) */
+        @font-face {{
+            font-family: 'NanumSquareRound';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/NanumSquareRound.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }}
+        /* 공공 무료 저작권 안심 폰트 2: 지마켓 산스 (누구나 제한 없이 사용 가능한 무료 폰트) */
+        @font-face {{
+            font-family: 'GmarketSansMedium';
+            src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_2001@1.1/GmarketSansMedium.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+            font-display: swap;
+        }}
+
         :root {{
             color-scheme: light !important;
         }}
         html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] {{
-            background: linear-gradient(165deg, #EEF2FF 0%, #F0FDF4 48%, #FFFBEB 100%) !important;
+            background: linear-gradient(155deg, #F5F7FF 0%, #F0FDF9 52%, #FFFDF5 100%) !important;
             background-attachment: fixed !important;
             color: #1E293B !important;
-            font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', -apple-system, BlinkMacSystemFont, sans-serif !important;
-            letter-spacing: -0.015em !important;
-            word-spacing: 0.02em !important;
+            font-family: 'NanumSquareRound', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif !important;
+            letter-spacing: -0.01em !important;
             overflow-x: hidden !important;
         }}
         .block-container {{
-            max-width: 1140px !important;
+            max-width: 1120px !important;
             margin: 0 auto !important;
-            padding-top: 1.35rem !important;
-            padding-bottom: 3.5rem !important;
-            padding-left: 2rem !important;
-            padding-right: 2rem !important;
+            padding-top: 1.2rem !important;
+            padding-bottom: 3rem !important;
+            padding-left: 1.8rem !important;
+            padding-right: 1.8rem !important;
         }}
         header[data-testid="stHeader"] {{
-            background: rgba(255, 255, 255, 0.88) !important;
+            background: rgba(255, 255, 255, 0.85) !important;
             backdrop-filter: blur(8px);
-            color: #1E293B !important;
-            border-bottom: 1px solid #E0E7FF;
+            border-bottom: 1px solid #E2E8F0;
         }}
         .stApp p, .stApp li, .stApp label, .stApp span, .stMarkdown {{
             color: #1E293B !important;
-            line-height: 1.7 !important;
+            font-family: 'NanumSquareRound', 'Malgun Gothic', sans-serif !important;
+            line-height: 1.65 !important;
             word-break: keep-all !important;
-            overflow-wrap: break-word !important;
         }}
         h1, h2, h3, h4 {{
             color: #0F172A !important;
-            font-family: 'Pretendard', 'Malgun Gothic', sans-serif !important;
-            letter-spacing: -0.025em !important;
-            line-height: 1.36 !important;
+            font-family: 'GmarketSansMedium', 'NanumSquareRound', sans-serif !important;
+            letter-spacing: -0.02em !important;
+            line-height: 1.35 !important;
             word-break: keep-all !important;
         }}
 
-        /* 키프레임 애니메이션: 카드 팝업 등장 & 진도바 반짝임 */
+        /* 키프레임 애니메이션 */
         @keyframes hqPopIn {{
-            0% {{ opacity: 0; transform: translateY(10px) scale(0.99); }}
+            0% {{ opacity: 0; transform: translateY(8px) scale(0.99); }}
             100% {{ opacity: 1; transform: translateY(0) scale(1); }}
         }}
         @keyframes hqShimmer {{
@@ -99,51 +121,56 @@ def inject_quest_css(reduce_motion: bool = False):
             50% {{ background-position: 100% 50%; }}
             100% {{ background-position: 0% 50%; }}
         }}
-        @keyframes hqPulseBadge {{
-            0%, 100% {{ transform: scale(1); }}
-            50% {{ transform: scale(1.04); }}
-        }}
 
-        /* 상단 히어로 배너 (사설 디지털 학습지 스타일 그라데이션) */
+        /* 상단 히어로 배너 (파스텔 바이올렛-스카이-민트 그라데이션) */
         .hq-hero-banner {{
-            background: linear-gradient(135deg, #4F46E5 0%, #0EA5E9 52%, #10B981 100%);
-            border-radius: 20px;
-            padding: 1.35rem 1.75rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 10px 25px rgba(79, 70, 229, 0.22);
-            color: #FFFFFF !important;
-            position: relative;
-            overflow: hidden;
-            animation: hqPopIn 0.35s ease-out;
+            background: linear-gradient(135deg, #6366F1 0%, #3B82F6 50%, #14B8A6 100%);
+            border-radius: 22px;
+            padding: 1.2rem 1.6rem;
+            margin-bottom: 0.9rem;
+            box-shadow: 0 10px 24px rgba(99, 102, 241, 0.2);
+            animation: hqPopIn 0.3s ease-out;
         }}
         .hq-hero-banner h1 {{
             color: #FFFFFF !important;
             margin: 0.25rem 0 0 0 !important;
-            font-size: 1.75rem !important;
-            font-weight: 800 !important;
-            text-shadow: 0 2px 6px rgba(15, 23, 42, 0.18);
+            font-size: 1.62rem !important;
+            font-weight: 700 !important;
         }}
         .hq-hero-sub {{
             color: #E0F2FE !important;
-            font-size: 0.9rem !important;
-            font-weight: 500 !important;
-            margin-top: 0.2rem !important;
+            font-size: 0.88rem !important;
+            margin-top: 0.15rem !important;
         }}
         .hq-hero-pill {{
             display: inline-block;
-            background: rgba(255, 255, 255, 0.22);
-            backdrop-filter: blur(4px);
-            border: 1px solid rgba(255, 255, 255, 0.4);
+            background: rgba(255, 255, 255, 0.24);
+            border: 1px solid rgba(255, 255, 255, 0.45);
             color: #FFFFFF !important;
-            font-size: 0.8rem;
+            font-size: 0.78rem;
             font-weight: 700;
-            padding: 0.22rem 0.75rem;
+            padding: 0.2rem 0.72rem;
             border-radius: 999px;
-            margin-right: 0.4rem;
-            margin-bottom: 0.25rem;
+            margin-right: 0.35rem;
         }}
 
-        /* 입력창 화사한 테두리 및 포커스 글로우 */
+        /* 사이드바 카드 및 텍스트 색상 보호 */
+        section[data-testid="stSidebar"] {{
+            background: linear-gradient(180deg, #FFFFFF 0%, #F5F7FF 100%) !important;
+            border-right: 1.5px solid #E0E7FF;
+        }}
+        .hq-sidebar-brand {{
+            background: linear-gradient(135deg, #6366F1 0%, #3B82F6 100%);
+            padding: 0.9rem 1rem;
+            border-radius: 16px;
+            margin-bottom: 0.4rem;
+            box-shadow: 0 6px 14px rgba(99, 102, 241, 0.22);
+        }}
+        .hq-sidebar-brand, .hq-sidebar-brand * {{
+            color: #FFFFFF !important;
+        }}
+
+        /* 입력창 디자인 */
         div[data-baseweb="select"] > div,
         div[data-baseweb="input"],
         div[data-baseweb="input"] > div,
@@ -153,99 +180,46 @@ def inject_quest_css(reduce_motion: bool = False):
         input[type="text"] {{
             background-color: #FFFFFF !important;
             color: #0F172A !important;
-            border: 2px solid #C7D2FE !important;
-            border-radius: 12px !important;
+            border: 2px solid #DBEAFE !important;
+            border-radius: 14px !important;
             -webkit-text-fill-color: #0F172A !important;
-            caret-color: #4F46E5 !important;
-            font-size: 0.95rem !important;
-            transition: all 0.18s ease !important;
+            font-family: 'NanumSquareRound', sans-serif !important;
+            font-size: 0.94rem !important;
+            transition: all 0.16s ease !important;
         }}
         textarea:focus,
         input[type="text"]:focus {{
             border-color: #6366F1 !important;
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18) !important;
-            transform: translateY(-1px);
-        }}
-        textarea::placeholder,
-        input::placeholder {{
-            color: #64748B !important;
-            -webkit-text-fill-color: #64748B !important;
-            opacity: 1 !important;
-        }}
-        ul[data-baseweb="menu"],
-        div[data-baseweb="popover"] div,
-        li[role="option"] {{
-            background-color: #FFFFFF !important;
-            color: #0F172A !important;
-        }}
-        li[role="option"]:hover {{
-            background-color: #EEF2FF !important;
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15) !important;
         }}
 
-        /* 폼 컨테이너 (사설 학습지 워크시트 프레임) */
+        /* 폼 컨테이너 */
         [data-testid="stForm"] {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%) !important;
-            border: 2px solid #C7D2FE !important;
+            background: #FFFFFF !important;
+            border: 2px solid #E0E7FF !important;
             border-top: 5px solid #6366F1 !important;
-            border-radius: 18px !important;
-            padding: 1.45rem 1.65rem !important;
-            box-shadow: 0 8px 20px rgba(79, 70, 229, 0.07);
-            animation: hqPopIn 0.3s ease-out;
-        }}
-        [data-testid="stExpander"],
-        [data-testid="stExpander"] details,
-        [data-testid="stExpander"] summary {{
-            background-color: #FFFFFF !important;
-            color: #1E293B !important;
-            border-color: #C7D2FE !important;
-            border-radius: 12px !important;
-        }}
-        div[role="radiogroup"] label {{
-            padding: 0.42rem 0.6rem !important;
-            border-radius: 10px !important;
-            transition: background-color 0.15s ease, transform 0.15s ease !important;
-        }}
-        div[role="radiogroup"] label:hover {{
-            background-color: #EEF2FF !important;
-            transform: translateX(4px);
-        }}
-        div[role="radiogroup"] label > div:first-child {{
-            background-color: #FFFFFF !important;
-            border: 2px solid #4F46E5 !important;
-        }}
-
-        /* 사이드바 화사한 파스텔 톤 */
-        section[data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #F5F3FF 100%) !important;
-            border-right: 2px solid #E0E7FF;
-        }}
-        section[data-testid="stSidebar"] * {{
-            color: #1E293B !important;
-        }}
-        section[data-testid="stSidebar"] div[data-baseweb="select"] > div,
-        section[data-testid="stSidebar"] input {{
-            background-color: #FFFFFF !important;
-            color: #0F172A !important;
-            -webkit-text-fill-color: #0F172A !important;
+            border-radius: 20px !important;
+            padding: 1.3rem 1.5rem !important;
+            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.06);
         }}
 
         /* ==============================================================
-           입체 3D 인터랙티브 버튼 (마우스 올릴 때 커지고 클릭할 때 쏙 눌리는 효과)
+           입체 3D 인터랙티브 버튼 (통통 튀는 호버 & 클릭 시 쏙 눌리는 효과)
            ============================================================== */
         div.stButton > button[kind="primary"],
         div.stFormSubmitButton > button[kind="primary"],
         div.stDownloadButton > button {{
-            background: linear-gradient(135deg, #4F46E5 0%, #0EA5E9 55%, #10B981 100%) !important;
-            background-size: 200% 200% !important;
+            background: linear-gradient(135deg, #6366F1 0%, #3B82F6 55%, #14B8A6 100%) !important;
             color: #FFFFFF !important;
             border: none !important;
             border-radius: 14px !important;
+            font-family: 'GmarketSansMedium', 'NanumSquareRound', sans-serif !important;
             font-weight: 700 !important;
-            font-size: 0.97rem !important;
-            padding: 0.72rem 1.25rem !important;
-            box-shadow: 0 5px 0 #3730A3, 0 8px 16px rgba(79, 70, 229, 0.28) !important;
-            transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.16s ease, filter 0.16s ease !important;
-            cursor: pointer !important;
+            font-size: 0.92rem !important;
+            height: 46px !important;
+            padding: 0 1.1rem !important;
+            box-shadow: 0 4px 0 #4338CA, 0 8px 16px rgba(99, 102, 241, 0.24) !important;
+            transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease !important;
         }}
         div.stButton > button[kind="primary"] *,
         div.stFormSubmitButton > button[kind="primary"] *,
@@ -255,215 +229,241 @@ def inject_quest_css(reduce_motion: bool = False):
         div.stButton > button[kind="primary"]:hover,
         div.stFormSubmitButton > button[kind="primary"]:hover,
         div.stDownloadButton > button:hover {{
-            transform: translateY(-3px) scale(1.022) !important;
-            box-shadow: 0 8px 0 #3730A3, 0 14px 24px rgba(14, 165, 233, 0.36) !important;
-            filter: brightness(1.05);
+            transform: translateY(-3px) scale(1.02) !important;
+            box-shadow: 0 7px 0 #4338CA, 0 12px 22px rgba(59, 130, 246, 0.32) !important;
         }}
         div.stButton > button[kind="primary"]:active,
         div.stFormSubmitButton > button[kind="primary"]:active,
         div.stDownloadButton > button:active {{
-            transform: translateY(3px) scale(0.965) !important;
-            box-shadow: 0 2px 0 #3730A3, 0 4px 8px rgba(79, 70, 229, 0.2) !important;
+            transform: translateY(3px) scale(0.97) !important;
+            box-shadow: 0 1px 0 #4338CA, 0 3px 6px rgba(99, 102, 241, 0.2) !important;
         }}
 
-        /* 보조 버튼 (화이트·파스텔 3D 입체 버튼) */
         div.stButton > button[kind="secondary"] {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%) !important;
-            color: #312E81 !important;
+            background: #FFFFFF !important;
+            color: #3730A3 !important;
             border: 2px solid #C7D2FE !important;
             border-radius: 14px !important;
+            font-family: 'GmarketSansMedium', 'NanumSquareRound', sans-serif !important;
             font-weight: 700 !important;
-            font-size: 0.93rem !important;
-            padding: 0.65rem 1.05rem !important;
-            box-shadow: 0 4px 0 #CBD5E1, 0 4px 10px rgba(15, 23, 42, 0.05) !important;
-            transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.16s ease, background-color 0.16s ease, border-color 0.16s ease !important;
-            cursor: pointer !important;
+            font-size: 0.9rem !important;
+            height: 46px !important;
+            padding: 0 1rem !important;
+            box-shadow: 0 4px 0 #CBD5E1, 0 4px 10px rgba(15, 23, 42, 0.04) !important;
+            transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s ease, background-color 0.15s ease !important;
         }}
         div.stButton > button[kind="secondary"] * {{
-            color: #312E81 !important;
+            color: #3730A3 !important;
         }}
         div.stButton > button[kind="secondary"]:hover {{
-            background: linear-gradient(180deg, #EEF2FF 0%, #E0E7FF 100%) !important;
+            background: #EEF2FF !important;
             border-color: #6366F1 !important;
             transform: translateY(-3px) scale(1.02) !important;
-            box-shadow: 0 6px 0 #A5B4FC, 0 10px 18px rgba(99, 102, 241, 0.18) !important;
+            box-shadow: 0 6px 0 #A5B4FC, 0 10px 18px rgba(99, 102, 241, 0.16) !important;
         }}
         div.stButton > button[kind="secondary"]:active {{
-            transform: translateY(3px) scale(0.965) !important;
-            box-shadow: 0 1px 0 #A5B4FC, 0 2px 4px rgba(99, 102, 241, 0.12) !important;
+            transform: translateY(3px) scale(0.97) !important;
+            box-shadow: 0 1px 0 #A5B4FC !important;
         }}
 
-        /* 스마트 디지털 학습지 컬러풀 카드 시스템 */
+        /* ==============================================================
+           3열 모의실습 카드: 높이·줄수 완벽 균형 고정 (Equal Height Cards)
+           ============================================================== */
+        .hq-equal-card {{
+            height: 238px !important;
+            border-radius: 20px;
+            padding: 1.15rem 1.25rem;
+            margin-bottom: 0.65rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            box-sizing: border-box;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            animation: hqPopIn 0.3s ease-out;
+        }}
+        .hq-equal-card:hover {{
+            transform: translateY(-4px);
+        }}
+        .hq-theme-0 {{
+            background: linear-gradient(180deg, #FFFFFF 0%, #ECFDF5 100%);
+            border: 2px solid #6EE7B7;
+            border-top: 6px solid #10B981;
+            box-shadow: 0 8px 18px rgba(16, 185, 129, 0.09);
+        }}
+        .hq-theme-1 {{
+            background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
+            border: 2px solid #93C5FD;
+            border-top: 6px solid #3B82F6;
+            box-shadow: 0 8px 18px rgba(59, 130, 246, 0.09);
+        }}
+        .hq-theme-2 {{
+            background: linear-gradient(180deg, #FFFFFF 0%, #FFF7ED 100%);
+            border: 2px solid #FDBA74;
+            border-top: 6px solid #F97316;
+            box-shadow: 0 8px 18px rgba(249, 115, 22, 0.09);
+        }}
+        .hq-theme-done {{
+            background: linear-gradient(180deg, #FFFFFF 0%, #F0FDFA 100%);
+            border: 2px solid #2DD4BF;
+            border-top: 6px solid #0D9488;
+            box-shadow: 0 8px 18px rgba(13, 148, 136, 0.12);
+        }}
+        .hq-eq-title {{
+            font-family: 'GmarketSansMedium', 'NanumSquareRound', sans-serif !important;
+            font-size: 1.02rem !important;
+            font-weight: 700 !important;
+            color: #0F172A !important;
+            margin: 0.35rem 0 0.35rem 0 !important;
+            line-height: 1.35 !important;
+            height: 2.7em !important;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }}
+        .hq-eq-desc {{
+            font-size: 0.87rem !important;
+            color: #475569 !important;
+            margin: 0 !important;
+            line-height: 1.5 !important;
+            height: 3.0em !important;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }}
+        .hq-eq-goal {{
+            font-size: 0.8rem !important;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 0.45rem 0.7rem;
+            border-radius: 10px;
+            border: 1.5px solid #E2E8F0;
+            color: #334155 !important;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        /* 일반 학습 카드 */
         .hq-card {{
             background: #FFFFFF;
             border: 2px solid #E0E7FF;
             border-radius: 18px;
-            padding: 1.35rem 1.55rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 6px 16px rgba(79, 70, 229, 0.06);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            animation: hqPopIn 0.32s ease-out;
+            padding: 1.2rem 1.4rem;
+            margin-bottom: 0.9rem;
+            box-shadow: 0 6px 16px rgba(99, 102, 241, 0.05);
         }}
-        .hq-card:hover {{
-            transform: translateY(-3px);
-            box-shadow: 0 10px 24px rgba(79, 70, 229, 0.12);
-        }}
-        .hq-card-level-0 {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #ECFDF5 100%);
-            border: 2px solid #6EE7B7;
-            border-top: 6px solid #10B981;
-            border-radius: 18px;
-            padding: 1.35rem 1.55rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 6px 16px rgba(16, 185, 129, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            animation: hqPopIn 0.32s ease-out;
-        }}
-        .hq-card-level-0:hover {{ transform: translateY(-4px) scale(1.01); }}
-        .hq-card-level-1 {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #EFF6FF 100%);
-            border: 2px solid #93C5FD;
-            border-top: 6px solid #3B82F6;
-            border-radius: 18px;
-            padding: 1.35rem 1.55rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            animation: hqPopIn 0.35s ease-out;
-        }}
-        .hq-card-level-1:hover {{ transform: translateY(-4px) scale(1.01); }}
-        .hq-card-level-2 {{
-            background: linear-gradient(180deg, #FFFFFF 0%, #FFF7ED 100%);
-            border: 2px solid #FDBA74;
-            border-top: 6px solid #F97316;
-            border-radius: 18px;
-            padding: 1.35rem 1.55rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 6px 16px rgba(249, 115, 22, 0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            animation: hqPopIn 0.38s ease-out;
-        }}
-        .hq-card-level-2:hover {{ transform: translateY(-4px) scale(1.01); }}
-
         .hq-card-selected {{
             background: linear-gradient(180deg, #FFFFFF 0%, #F0FDFA 100%);
-            border: 2px solid #2DD4BF;
-            border-top: 6px solid #0D9488;
-            border-radius: 18px;
-            padding: 1.35rem 1.55rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 8px 20px rgba(13, 148, 136, 0.12);
-            animation: hqPopIn 0.3s ease-out;
+            border: 2px solid #5EEAD4;
+            border-left: 6px solid #14B8A6;
+            border-radius: 16px;
+            padding: 1rem 1.3rem;
+            margin-bottom: 0.75rem;
         }}
         .hq-card-blue {{
-            background: linear-gradient(135deg, #EFF6FF 0%, #E0E7FF 100%);
-            border: 2px solid #93C5FD;
+            background: linear-gradient(135deg, #EFF6FF 0%, #EEF2FF 100%);
+            border: 2px solid #BFDBFE;
             border-left: 6px solid #4F46E5;
             border-radius: 16px;
-            padding: 1.15rem 1.45rem;
-            margin-bottom: 1rem;
-            animation: hqPopIn 0.28s ease-out;
+            padding: 1rem 1.35rem;
+            margin-bottom: 0.9rem;
         }}
         .hq-card-coral {{
             background: linear-gradient(135deg, #FFF1F2 0%, #FFE4E6 100%);
             border: 2px solid #FDA4AF;
-            border-left: 6px solid #E11D48;
+            border-left: 6px solid #F43F5E;
             border-radius: 16px;
-            padding: 1.2rem 1.45rem;
-            margin-bottom: 1rem;
-            animation: hqPopIn 0.28s ease-out;
+            padding: 1rem 1.35rem;
+            margin-bottom: 0.9rem;
         }}
         .hq-card-teacher {{
             background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%);
             border: 2px solid #FCD34D;
-            border-left: 6px solid #D97706;
+            border-left: 6px solid #F59E0B;
             border-radius: 16px;
-            padding: 1.25rem 1.5rem;
-            margin-bottom: 1rem;
-            box-shadow: 0 6px 16px rgba(217, 119, 6, 0.1);
-            animation: hqPopIn 0.3s ease-out;
+            padding: 1.15rem 1.4rem;
+            margin-bottom: 0.9rem;
         }}
 
-        /* 화사한 컬러 배지 */
+        /* 파스텔 캡슐 배지 */
         .hq-badge-teal {{
-            display: inline-block; background: linear-gradient(135deg, #CCFBF1, #99F6E4); color: #0F766E !important;
-            font-size: 0.8rem; font-weight: 800; padding: 0.24rem 0.72rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #CCFBF1; color: #0F766E !important;
+            font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.68rem; border-radius: 999px; margin-right: 0.3rem;
         }}
         .hq-badge-basic {{
-            display: inline-block; background: linear-gradient(135deg, #D1FAE5, #A7F3D0); color: #047857 !important;
-            font-size: 0.8rem; font-weight: 800; padding: 0.24rem 0.72rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #D1FAE5; color: #047857 !important;
+            font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.68rem; border-radius: 999px; margin-right: 0.3rem;
         }}
         .hq-badge-inter {{
-            display: inline-block; background: linear-gradient(135deg, #DBEAFE, #BFDBFE); color: #1D4ED8 !important;
-            font-size: 0.8rem; font-weight: 800; padding: 0.24rem 0.72rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #DBEAFE; color: #1D4ED8 !important;
+            font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.68rem; border-radius: 999px; margin-right: 0.3rem;
         }}
         .hq-badge-adv {{
-            display: inline-block; background: linear-gradient(135deg, #FFEDD5, #FED7AA); color: #C2410C !important;
-            font-size: 0.8rem; font-weight: 800; padding: 0.24rem 0.72rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #FFEDD5; color: #C2410C !important;
+            font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.68rem; border-radius: 999px; margin-right: 0.3rem;
         }}
         .hq-badge-coral {{
-            display: inline-block; background: linear-gradient(135deg, #FFE4E6, #FECDD3); color: #BE123C !important;
-            font-size: 0.8rem; font-weight: 800; padding: 0.24rem 0.72rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #FFE4E6; color: #BE123C !important;
+            font-size: 0.78rem; font-weight: 800; padding: 0.2rem 0.68rem; border-radius: 999px; margin-right: 0.3rem;
         }}
         .hq-badge-navy {{
-            display: inline-block; background: #EEF2FF; color: #3730A3 !important; border: 1px solid #C7D2FE;
-            font-size: 0.8rem; font-weight: 700; padding: 0.22rem 0.7rem; border-radius: 999px; margin-right: 0.35rem;
+            display: inline-block; background: #EEF2FF; color: #4338CA !important;
+            font-size: 0.76rem; font-weight: 700; padding: 0.18rem 0.62rem; border-radius: 999px;
         }}
 
-        /* 상단 실시간 진도 보드 */
+        /* 상단 컴팩트 진도 보드 */
         .hq-tracker-board {{
             background: #FFFFFF;
-            border: 2px solid #C7D2FE;
+            border: 2px solid #E0E7FF;
             border-radius: 18px;
-            padding: 1.05rem 1.35rem;
-            margin-bottom: 1.1rem;
-            box-shadow: 0 6px 18px rgba(79, 70, 229, 0.08);
+            padding: 0.9rem 1.25rem;
+            margin-bottom: 0.95rem;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.06);
         }}
         .hq-progress-fill {{
-            background: linear-gradient(90deg, #4F46E5 0%, #0EA5E9 50%, #10B981 100%);
+            background: linear-gradient(90deg, #6366F1 0%, #3B82F6 50%, #10B981 100%);
             background-size: 200% 200%;
             animation: hqShimmer 3s ease infinite;
             height: 100%;
             border-radius: 999px;
-            transition: width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transition: width 0.4s ease;
         }}
         .hq-tracker-grid {{
             display: grid;
             grid-template-columns: repeat(5, 1fr);
             gap: 8px;
-            margin-top: 0.7rem;
+            margin-top: 0.55rem;
         }}
         .hq-step-pill {{
             border-radius: 12px;
-            padding: 0.52rem 0.6rem;
-            font-size: 0.81rem;
+            padding: 0.42rem 0.5rem;
+            font-size: 0.8rem;
             font-weight: 700;
             text-align: center;
             border: 1.5px solid #E2E8F0;
             background: #F8FAFC;
             color: #64748B !important;
-            transition: transform 0.2s ease;
         }}
         .hq-step-pill.done {{
-            background: linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%);
+            background: #ECFDF5;
             border: 2px solid #10B981;
             color: #047857 !important;
             font-weight: 800;
-            box-shadow: 0 3px 8px rgba(16, 185, 129, 0.16);
-            animation: hqPulseBadge 2.4s ease-in-out infinite;
         }}
         .hq-guide-bar {{
-            background: linear-gradient(90deg, #FFFFFF 0%, #EEF2FF 100%);
-            border: 2px solid #C7D2FE;
-            border-left: 6px solid #4F46E5;
+            background: #FFFFFF;
+            border: 2px solid #E0E7FF;
+            border-left: 6px solid #6366F1;
             border-radius: 14px;
-            padding: 0.95rem 1.3rem;
-            margin-bottom: 1.15rem;
-            box-shadow: 0 4px 12px rgba(79, 70, 229, 0.05);
+            padding: 0.75rem 1.15rem;
+            margin-bottom: 1rem;
         }}
         @media (max-width: 768px) {{
             .block-container {{ padding-left: 0.9rem !important; padding-right: 0.9rem !important; }}
             .hq-tracker-grid {{ grid-template-columns: 1fr 1fr; }}
+            .hq-equal-card {{ height: auto !important; min-height: 220px !important; }}
         }}
         {motion_css}
         </style>
@@ -472,10 +472,7 @@ def inject_quest_css(reduce_motion: bool = False):
 
 
 def render_sound_effects():
-    """
-    버튼 클릭 및 미션 이벤트 발생 시(`hq_pending_sound`가 있을 때만) 초경량 Web Audio API 사운드를 재생합니다.
-    초기 페이지 접속 시에는 불필요한 iframe을 렌더링하지 않아 share.streamlit.io 로딩 속도를 즉시(0초)로 보장합니다.
-    """
+    """버튼 클릭 및 미션 완료 시(`hq_pending_sound`) 경쾌한 Web Audio API 효과음을 재생합니다."""
     sound_enabled = st.session_state.get("hq_sound_enabled", True)
     pending_sound = st.session_state.pop("hq_pending_sound", None)
     if not sound_enabled or not pending_sound:
@@ -510,32 +507,32 @@ def render_sound_effects():
             const pending = '{pending_sound}';
             if (pending === 'pop') {{
                 playToneSequence([
-                    {{freq: 660, delay: 0, dur: 0.07, vol: 0.12, type: 'sine'}},
+                    {{freq: 660, delay: 0, dur: 0.06, vol: 0.12, type: 'sine'}},
                     {{freq: 880, delay: 0.05, dur: 0.08, vol: 0.12, type: 'sine'}}
                 ]);
             }} else if (pending === 'chime') {{
                 playToneSequence([
-                    {{freq: 523.25, delay: 0, dur: 0.13, vol: 0.14, type: 'triangle'}},
-                    {{freq: 659.25, delay: 0.09, dur: 0.15, vol: 0.14, type: 'triangle'}},
-                    {{freq: 783.99, delay: 0.18, dur: 0.24, vol: 0.15, type: 'triangle'}}
+                    {{freq: 523.25, delay: 0, dur: 0.12, vol: 0.14, type: 'triangle'}},
+                    {{freq: 659.25, delay: 0.09, dur: 0.14, vol: 0.14, type: 'triangle'}},
+                    {{freq: 783.99, delay: 0.18, dur: 0.22, vol: 0.15, type: 'triangle'}}
                 ]);
             }} else if (pending === 'success') {{
                 playToneSequence([
                     {{freq: 587.33, delay: 0, dur: 0.11, vol: 0.15, type: 'sine'}},
                     {{freq: 739.99, delay: 0.09, dur: 0.13, vol: 0.15, type: 'sine'}},
-                    {{freq: 880.00, delay: 0.18, dur: 0.26, vol: 0.17, type: 'triangle'}}
+                    {{freq: 880.00, delay: 0.18, dur: 0.25, vol: 0.17, type: 'triangle'}}
                 ]);
             }} else if (pending === 'try_again') {{
                 playToneSequence([
-                    {{freq: 440.00, delay: 0, dur: 0.13, vol: 0.12, type: 'sine'}},
-                    {{freq: 392.00, delay: 0.11, dur: 0.20, vol: 0.12, type: 'sine'}}
+                    {{freq: 440.00, delay: 0, dur: 0.12, vol: 0.12, type: 'sine'}},
+                    {{freq: 392.00, delay: 0.11, dur: 0.18, vol: 0.12, type: 'sine'}}
                 ]);
             }} else if (pending === 'fanfare') {{
                 playToneSequence([
                     {{freq: 523.25, delay: 0, dur: 0.12, vol: 0.15, type: 'triangle'}},
                     {{freq: 659.25, delay: 0.10, dur: 0.12, vol: 0.15, type: 'triangle'}},
                     {{freq: 783.99, delay: 0.20, dur: 0.13, vol: 0.15, type: 'triangle'}},
-                    {{freq: 1046.50, delay: 0.31, dur: 0.35, vol: 0.18, type: 'triangle'}}
+                    {{freq: 1046.50, delay: 0.31, dur: 0.34, vol: 0.18, type: 'triangle'}}
                 ]);
             }}
         }})();
@@ -546,57 +543,53 @@ def render_sound_effects():
 
 
 def render_progress_tracker_board():
-    """모든 화면 상단에 실시간 학습 진도율(%)과 5단계 완료 체크를 한눈에 보여주는 스마트 학습지 진도 보드."""
+    """한눈에 들어오는 심플·컴팩트 실시간 학습 진도 보드."""
     scen = get_current_scenario_data()
     done_cnt, total_cnt, pct_ratio = get_scenario_progress(scen)
     flags = get_step_completion_flags()
     xp = st.session_state.get("hq_xp", 0)
     pct_int = int(pct_ratio * 100)
 
-    def _pill(label: str, is_done: bool) -> str:
+    def _pill(icon_label: str, is_done: bool) -> str:
         cls = "hq-step-pill done" if is_done else "hq-step-pill"
-        mark = "🌟 완료!" if is_done else "대기"
-        return f"<div class='{cls}'>{label}<br><span style='font-size:0.75rem;'>({mark})</span></div>"
+        mark = "✨ 완료" if is_done else "대기"
+        return f"<div class='{cls}'>{icon_label} · {mark}</div>"
 
     _md_html(
         f"""
         <div class="hq-tracker-board">
-            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.5rem;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.4rem;">
                 <div>
-                    <span class="hq-badge-teal">🚀 실시간 학습 진도율 · {pct_int}%</span>
-                    <span class="hq-badge-inter">🎯 모의실습 해결 · {done_cnt} / {total_cnt}단계 (기초·중급·심화)</span>
-                    <span class="hq-badge-adv">⭐ 성취 포인트 · {xp} XP</span>
+                    <span class="hq-badge-teal">📊 학습 진도율 {pct_int}%</span>
+                    <span class="hq-badge-inter">🎯 실습 해결 {done_cnt}/{total_cnt}단계</span>
+                    <span class="hq-badge-adv">⭐ {xp} XP</span>
                 </div>
-                <div style="font-size:0.83rem; color:#475569; font-weight:600;">
-                    질문 작성 → 기초·중급·심화 개인 서술 → 팀 협력 & 교사 피드백 순서로 진행할 때마다 진도율이 쑥쑥 올라갑니다!
+                <div style="font-size:0.81rem; color:#64748B; font-weight:700;">
+                    단계별 미션을 완료할 때마다 진도율이 즉시 올라갑니다!
                 </div>
             </div>
-            <div style="background:#E0E7FF; height:13px; border-radius:999px; overflow:hidden; margin-top:0.6rem; padding:2px;">
+            <div style="background:#E0E7FF; height:11px; border-radius:999px; overflow:hidden; margin-top:0.5rem; padding:1.5px;">
                 <div class="hq-progress-fill" style="width:{max(5, pct_int)}%;"></div>
             </div>
             <div class="hq-tracker-grid">
-                {_pill("① 단원 질문 (2~3개)", flags["q_done"])}
-                {_pill("② 기초 모의실습 (개인)", flags["m1_done"])}
-                {_pill("③ 중급 모의실습 (개인)", flags["m2_done"])}
-                {_pill("④ 심화 모의실습 (개인)", flags["m3_done"])}
-                {_pill("⑤ 팀 협력·교사 피드백", flags["team_done"] and flags["teacher_done"])}
+                {_pill("💬 ① 개념 질문", flags["q_done"])}
+                {_pill("🌱 ② 기초 실습", flags["m1_done"])}
+                {_pill("💧 ③ 중급 실습", flags["m2_done"])}
+                {_pill("🔥 ④ 심화 실습", flags["m3_done"])}
+                {_pill("🏆 ⑤ 협력·제출", flags["team_done"] and flags["teacher_done"])}
             </div>
         </div>
         """
     )
 
 
-def render_simple_guide(step_tag: str, now_do: str, why_do: str):
+def render_simple_guide(step_tag: str, now_do: str):
+    """글자 수를 대폭 줄여 핵심 할 일만 한 줄로 깔끔하게 안내하는 가이드 바."""
     _md_html(
         f"""
         <div class="hq-guide-bar">
-            <div style="font-size:0.97rem;">
-                <span class="hq-badge-inter">{step_tag}</span>
-                <strong style="color:#0F172A;">{now_do}</strong>
-            </div>
-            <div style="font-size:0.86rem; color:#475569; margin-top:0.25rem;">
-                💡 <strong>수업 설계 의도</strong> · {why_do}
-            </div>
+            <span class="hq-badge-inter">{step_tag}</span>
+            <strong style="color:#0F172A; font-size:0.95rem;">{now_do}</strong>
         </div>
         """
     )
@@ -605,17 +598,17 @@ def render_simple_guide(step_tag: str, now_do: str, why_do: str):
 def render_one_time_notifications():
     badge = st.session_state.pop("hq_pending_badge_notice", None)
     if badge:
-        st.success(f"🏅 [역량 배지 획득!] {badge['title']} — {badge['desc']}")
+        st.success(f"🏅 [배지 획득!] {badge['title']} — {badge['desc']}")
 
     celeb = st.session_state.pop("hq_pending_celebration", None)
     if celeb:
         if not st.session_state.get("hq_reduce_motion", False):
             st.balloons()
-        st.info("🎉 와우! 기초 · 중급 · 심화 3단계 개인 모의실습을 모두 해결했습니다! 이제 [STEP 03 · 팀 협력 & 교사 피드백] 탭으로 이동해 최종 제출을 완성해 보세요.")
+        st.info("🎉 기초 · 중급 · 심화 3단계 모의실습 완주 성공! 이제 [STEP 03 · 팀 협력 & 교사 피드백]으로 이동해 보세요.")
 
 
 # ==============================================================================
-# STEP 01: 단원 개념·의학용어 질문(2~3개) & AI 피드백 → 기초·중급·심화 모의실습 3개 제시
+# STEP 01: 단원 질문(2~3개) & AI 피드백 → 균형 잡힌 3열 모의실습 카드 제시
 # ==============================================================================
 def render_unit_inquiry_and_scenario_selection():
     unit = get_current_unit_data()
@@ -626,20 +619,19 @@ def render_unit_inquiry_and_scenario_selection():
     sample_qs = unit.get(
         "sample_questions",
         [
-            "이 단원의 핵심 의학용어가 실제 환자 간호에서 어떻게 쓰이나요?",
+            "이 단원의 핵심 의학용어는 실제 간호에서 어떻게 쓰이나요?",
             "응급 보고가 필요한 기준은 무엇인가요?",
-            "예비 보건의료인이 주의해야 할 안전 수칙은 무엇인가요?",
+            "예비 의료인이 꼭 지켜야 할 안전 수칙은 무엇인가요?",
         ],
     )
 
     render_simple_guide(
-        step_tag="STEP 01 · 자기주도 질문 & 맞춤 실습 설계",
-        now_do="단원의 모르는 개념·의학용어 질문 2~3개를 작성하여 AI 보건튜터 피드백을 받고, 내 수준에 맞춘 [기초·중급·심화] 모의실습 3개를 제시받으세요.",
-        why_do="학생이 스스로 질문을 던지며 개념을 먼저 깨우친 뒤, 기초→중급→심화 단계별 PBL 상황으로 나아가야 진정한 자기주도학습이 이루어집니다.",
+        step_tag="💬 STEP 01",
+        now_do="핵심 의학용어를 짚어보고 궁금한 질문 2~3개를 등록해 맞춤형 모의실습(기초·중급·심화)을 시작하세요!",
     )
 
-    # 1) 단원 핵심 의학용어 사전 (클릭형)
-    st.markdown("#### 📘 1. 단원 핵심 의학용어 콕콕 짚어보기 (버튼을 눌러보세요!)")
+    # 1) 단원 핵심 의학용어 (클릭형 캡슐 버튼)
+    st.markdown("#### 💡 1. 핵심 의학용어 톡톡 카드")
     term_items = list(unit.get("key_terms", {}).items())
     if term_items:
         t_cols = st.columns(len(term_items), gap="small")
@@ -648,7 +640,7 @@ def render_unit_inquiry_and_scenario_selection():
             short_name = t_name.split("(")[0].strip()
             with t_cols[i]:
                 if st.button(
-                    f"🔍 {short_name}",
+                    f"🏷️ {short_name}",
                     key=f"term_btn_{i}",
                     type="primary" if i == cur_t_idx else "secondary",
                     use_container_width=True,
@@ -660,26 +652,25 @@ def render_unit_inquiry_and_scenario_selection():
         sel_t_name, sel_t_desc = term_items[cur_t_idx]
         _md_html(
             f"""
-            <div class="hq-card-blue" style="margin-top:0.25rem;">
-                <span class="hq-badge-inter">핵심 의학용어 카드</span>
-                <strong style="font-size:1.03rem; color:#1E1B4B;">{html.escape(sel_t_name)}</strong>
-                <div style="font-size:0.94rem; color:#1E293B; margin-top:0.35rem;">{html.escape(sel_t_desc)}</div>
+            <div class="hq-card-blue" style="margin-top:0.2rem;">
+                <span class="hq-badge-inter">용어 쏙쏙 해설</span>
+                <strong style="font-size:1rem; color:#1E1B4B;">{html.escape(sel_t_name)}</strong>
+                <div style="font-size:0.92rem; color:#1E293B; margin-top:0.25rem;">{html.escape(sel_t_desc)}</div>
             </div>
             """
         )
 
-    # 2) 학생 질문 2~3개 입력 폼 & 예시 자동 채우기 버튼
-    st.markdown("#### 💬 2. 나의 궁금한 개념·의학용어 질문하기 (2~3개 작성)")
-    col_auto, col_caption = st.columns([1.15, 2.1])
-    with col_auto:
-        if st.button("✨ 단원 추천 질문 3개 자동으로 채우기", type="secondary", use_container_width=True):
+    # 2) 학생 질문 2~3개 입력 폼 (간결화)
+    c_hdr, c_auto = st.columns([1.8, 1])
+    with c_hdr:
+        st.markdown("#### 🙋‍♀️ 2. 나의 궁금한 질문 2~3개 적기")
+    with c_auto:
+        if st.button("🪄 추천 질문 3개 자동 입력", type="secondary", use_container_width=True):
             st.session_state[f"q1_{unit['unit_id']}"] = sample_qs[0] if len(sample_qs) > 0 else ""
             st.session_state[f"q2_{unit['unit_id']}"] = sample_qs[1] if len(sample_qs) > 1 else ""
             st.session_state[f"q3_{unit['unit_id']}"] = sample_qs[2] if len(sample_qs) > 2 else ""
             st.session_state["hq_pending_sound"] = "chime"
             st.rerun()
-    with col_caption:
-        st.caption("※ 직접 궁금한 점을 2~3개 적거나, 왼쪽 [✨ 단원 추천 질문 3개 자동으로 채우기] 버튼을 눌러 수정해 보세요.")
 
     default_q1 = st.session_state.get(
         f"q1_{unit['unit_id']}",
@@ -695,30 +686,30 @@ def render_unit_inquiry_and_scenario_selection():
     )
 
     with st.form("student_questions_form", clear_on_submit=False):
-        c_lv1, c_lv2 = st.columns([1.2, 1.8])
+        c_lv1, c_lv2 = st.columns([1, 1.5])
         with c_lv1:
             level_choice = st.selectbox(
-                "나의 현재 단원 이해 수준 선택",
+                "나의 학습 난이도 선택",
                 [
-                    "기초부터 차근차근 (개념 설명 중심)",
-                    "표준 (기초→중급→심화 순차 도전)",
-                    "심화 (임상 우선순위·응급 판단 중심)",
+                    "🌱 기초부터 차근차근",
+                    "💧 표준 (기초→중급→심화)",
+                    "🔥 심화 (응급·우선순위 중심)",
                 ],
                 index=1,
             )
         with c_lv2:
             custom_sub = st.text_input(
-                "세부 학습 주제 (교과서 내 다른 소단원·질환을 직접 적어도 반영됩니다)",
+                "세부 학습 주제 (선택 입력)",
                 value=st.session_state.get("hq_custom_unit_topic", ""),
-                placeholder=f"기본값: {unit_name} (또는 원하는 교과서 세부 단원명 입력)",
+                placeholder=f"예: {unit_name}",
             )
 
-        q1_in = st.text_input("질문 1 (모르는 의학용어 또는 기본 개념 질문 - 필수)", value=default_q1)
-        q2_in = st.text_input("질문 2 (실제 병원 상황에서 궁금한 간호 판단 질문 - 필수)", value=default_q2)
-        q3_in = st.text_input("질문 3 (환자안전·응급 대처 등 더 알고 싶은 질문 - 선택)", value=default_q3)
+        q1_in = st.text_input("💬 질문 1 (개념·의학용어 질문)", value=default_q1)
+        q2_in = st.text_input("💬 질문 2 (병원 실습 판단 질문)", value=default_q2)
+        q3_in = st.text_input("💬 질문 3 (추가로 궁금한 점 - 선택)", value=default_q3)
 
         submit_q_btn = st.form_submit_button(
-            "🚀 질문 제출하고 AI 보건튜터 피드백 & 모의실습 3단계(기초·중급·심화) 제시받기",
+            "✨ 질문 등록 & AI 튜터 피드백 받기",
             type="primary",
             use_container_width=True,
         )
@@ -729,74 +720,65 @@ def render_unit_inquiry_and_scenario_selection():
         st.session_state[f"q3_{unit['unit_id']}"] = q3_in
         st.session_state["hq_student_level"] = level_choice
         st.session_state["hq_custom_unit_topic"] = custom_sub.strip()
-        q_list = [q1_in, q2_in, q3_in]
-        entries = submit_student_questions_and_get_feedback(unit, q_list, level_choice, custom_sub)
+        entries = submit_student_questions_and_get_feedback(unit, [q1_in, q2_in, q3_in], level_choice, custom_sub)
         if entries:
-            st.toast("🎶 질문 피드백과 기초·중급·심화 모의실습 3개가 생성되었습니다! 진도율이 상승했습니다.")
+            st.toast("🎶 질문 피드백과 수준별 모의실습 3단계가 준비되었습니다!")
             st.rerun()
         else:
-            st.warning("최소 1개 이상의 질문을 입력해 주세요.")
+            st.warning("질문을 1개 이상 입력해 주세요.")
 
-    # 3) AI 보건튜터의 질문별 피드백 출력
+    # 3) AI 보건튜터 질문 피드백
     updated_qs = get_unit_questions_for_current()
     if updated_qs:
-        st.markdown("#### 🤖 3. 학생 질문에 대한 AI 보건튜터 맞춤 피드백")
+        st.markdown("#### 🤖 3. AI 보건튜터의 질문 쏙쏙 피드백")
         for item in updated_qs:
             _md_html(
                 f"""
-                <div class="hq-card-selected" style="padding:1.05rem 1.35rem; margin-bottom:0.65rem;">
-                    <div>
-                        <span class="hq-badge-teal">나의 질문 {item['q_num']}</span>
-                        <strong style="font-size:0.98rem;">{html.escape(item['question'])}</strong>
-                    </div>
+                <div class="hq-card-selected">
+                    <span class="hq-badge-teal">Q{item['q_num']}</span>
+                    <strong style="font-size:0.96rem;">{html.escape(item['question'])}</strong>
                 </div>
                 """
             )
             st.markdown(item["feedback_markdown"])
 
-    _md_html("<hr style='margin: 1.4rem 0; border-color: #C7D2FE;'>")
+    _md_html("<hr style='margin: 1.2rem 0; border-color: #E0E7FF;'>")
 
-    # 4) 학생의 질문과 수준을 고려해 제시된 모의실습 상황 3개 (기초 · 중급 · 심화)
-    st.markdown("#### 🎯 4. 질문과 수준을 반영한 맞춤형 모의실습 상황 3개 (기초 · 중급 · 심화)")
-    st.caption("※ 학생의 질문을 바탕으로 구성된 [🟢 기초 → 🔵 중급 → 🟠 심화] 3단계 모의실습입니다. 카드를 확인하고 아래 입체 버튼을 눌러 도전해 보세요!")
+    # 4) 높이·크기가 완벽히 균형 잡힌 3열 모의실습 카드 (기초 · 중급 · 심화)
+    st.markdown("#### 🎯 4. 수준별 맞춤형 모의실습 3단계 (기초 · 중급 · 심화)")
 
     m_cols = st.columns(3, gap="medium")
     badge_classes = ["hq-badge-basic", "hq-badge-inter", "hq-badge-adv"]
-    level_icons = ["🟢", "🔵", "🟠"]
+    level_tags = ["🌱 기초 미션", "💧 중급 미션", "🔥 심화 미션"]
     subs = st.session_state.get("hq_submissions", {})
 
     for idx, m in enumerate(missions):
         is_done = m["id"] in subs
         b_cls = badge_classes[min(idx, 2)]
-        lv_icon = level_icons[min(idx, 2)]
-        card_cls = "hq-card-selected" if is_done else f"hq-card-level-{min(idx, 2)}"
-        status_txt = "🌟 해결 완료!" if is_done else "도전 대기"
+        lv_tag = level_tags[min(idx, 2)]
+        theme_cls = "hq-theme-done" if is_done else f"hq-theme-{min(idx, 2)}"
+        status_txt = "✨ 해결 완료" if is_done else "도전 대기"
+        clean_title = _clean_mission_title(m.get("title", ""))
 
         with m_cols[idx]:
             _md_html(
                 f"""
-                <div class="{card_cls}" style="min-height:250px; display:flex; flex-direction:column; justify-content:space-between;">
+                <div class="hq-equal-card {theme_cls}">
                     <div>
-                        <div style="margin-bottom:0.5rem;">
-                            <span class="{b_cls}">{lv_icon} {html.escape(m.get('level_label', f'단계 {idx+1}'))}</span>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span class="{b_cls}">{lv_tag}</span>
                             <span class="hq-badge-navy">{status_txt}</span>
                         </div>
-                        <h4 style="margin:0.2rem 0 0.5rem 0; font-size:1.05rem;">{html.escape(m['title'])}</h4>
-                        <p style="font-size:0.89rem; color:#334155; margin-bottom:0.6rem;">
-                            {html.escape(m['situation'][:95])}...
-                        </p>
+                        <div class="hq-eq-title">{html.escape(clean_title)}</div>
+                        <p class="hq-eq-desc">{html.escape(m['situation'])}</p>
                     </div>
-                    <div style="font-size:0.82rem; background:#FFFFFF; padding:0.55rem 0.75rem; border-radius:10px; border:1.5px solid #E0E7FF; color:#3730A3;">
-                        <strong>🎯 학습목표</strong>: {html.escape(m['learning_objective'][:62])}...
+                    <div class="hq-eq-goal">
+                        🎯 <strong>목표</strong> · {html.escape(m['learning_objective'])}
                     </div>
                 </div>
                 """
             )
-            btn_lbl = (
-                f"{lv_icon} {m.get('level_label', '실습')} 해결하러 가기 →"
-                if not is_done
-                else f"✔ {m.get('level_label', '실습')} 결과/피드백 다시 보기"
-            )
+            btn_lbl = f"{lv_tag} 시작하기 →" if not is_done else f"✔ {lv_tag} 결과 보기"
             if st.button(btn_lbl, key=f"go_mission_{idx}", type="primary" if not is_done else "secondary", use_container_width=True):
                 st.session_state["hq_active_mission_idx"] = idx
                 st.session_state["hq_nav_view"] = "STEP 02 · 기초·중급·심화 실습"
@@ -805,7 +787,7 @@ def render_unit_inquiry_and_scenario_selection():
 
 
 # ==============================================================================
-# STEP 02: 기초 · 중급 · 심화 모의실습 PBL 자기주도 해결 (개인별 서술 제출 & AI 보건튜터 개인 피드백)
+# STEP 02: 기초 · 중급 · 심화 모의실습 PBL 자기주도 해결
 # ==============================================================================
 def render_mission_runner():
     scenario = get_current_scenario_data()
@@ -813,27 +795,25 @@ def render_mission_runner():
     active_idx = min(st.session_state.get("hq_active_mission_idx", 0), len(missions) - 1)
     mission = missions[active_idx]
     m_id = mission["id"]
-    level_label = mission.get("level_label", f"미션 {mission.get('step_num', 1)}")
+    level_tags = ["🌱 기초 모의실습", "💧 중급 모의실습", "🔥 심화 모의실습"]
+    level_label = level_tags[min(active_idx, 2)]
+    clean_title = _clean_mission_title(mission.get("title", ""))
 
     existing_sub = st.session_state.get("hq_submissions", {}).get(m_id)
 
     render_simple_guide(
-        step_tag=f"STEP 02 · {level_label} (개인 자기주도 PBL 해결)",
-        now_do=f"[{level_label}] 환자 상황과 임상 단서를 분석하여 알맞은 판단을 고르고, 개인별로 해결 방안과 근거를 서술해 AI 보건튜터의 개인 피드백을 받으세요.",
-        why_do=mission.get("learning_objective", ""),
+        step_tag=f"🩺 STEP 02 · {level_label}",
+        now_do="환자 상황과 단서를 확인하고 알맞은 판단 선택지와 개인 근거를 작성해 AI 튜터 피드백을 받으세요!",
     )
 
     # 기초 -> 중급 -> 심화 상단 선택 버튼
-    level_icons = ["🟢", "🔵", "🟠"]
     m_cols = st.columns(len(missions), gap="small")
     for i, m_item in enumerate(missions):
         sub_i = st.session_state.get("hq_submissions", {}).get(m_item["id"])
-        lv_name = m_item.get("level_label", f"단계 {i+1}")
-        icon_i = level_icons[min(i, 2)]
-        done_mark = " 🌟완료" if sub_i else " (도전)"
+        done_mark = " ✨완료" if sub_i else ""
         with m_cols[i]:
             if st.button(
-                f"{icon_i} {i + 1}단계 · {lv_name}{done_mark}",
+                f"{level_tags[min(i, 2)]}{done_mark}",
                 key=f"step_m_{m_item['id']}",
                 type="primary" if i == active_idx else "secondary",
                 use_container_width=True,
@@ -842,25 +822,24 @@ def render_mission_runner():
                 st.session_state["hq_pending_sound"] = "pop"
                 st.rerun()
 
-    # [제시문 카드] 모의실습 상황 및 핵심 임상 단서
+    # [제시문 카드]
     clues_html = " &nbsp;·&nbsp; ".join([f"<strong>{html.escape(c)}</strong>" for c in mission.get("clinical_clues", [])])
     badge_cls = "hq-badge-basic" if active_idx == 0 else ("hq-badge-inter" if active_idx == 1 else "hq-badge-adv")
-    card_level_cls = f"hq-card-level-{min(active_idx, 2)}"
 
     _md_html(
         f"""
-        <div class="{card_level_cls}" style="margin-top:0.35rem;">
-            <div style="margin-bottom:0.5rem;">
-                <span class="{badge_cls}">{level_icons[min(active_idx, 2)]} {html.escape(level_label)} ({active_idx + 1} / {len(missions)})</span>
-                <span class="hq-badge-navy">{html.escape(mission.get('question_type', 'PBL 문제해결'))}</span>
+        <div class="hq-card" style="margin-top:0.35rem;">
+            <div style="margin-bottom:0.4rem;">
+                <span class="{badge_cls}">{level_label} ({active_idx + 1}/{len(missions)})</span>
+                <span class="hq-badge-navy">🎯 {html.escape(mission.get('learning_objective', ''))}</span>
             </div>
-            <h3 style="margin:0.15rem 0 0.7rem 0; font-size:1.26rem;">{html.escape(mission['title'])}</h3>
-            <div style="font-size:0.97rem; background:#FFFFFF; padding:1.05rem 1.25rem; border-radius:12px; border:1.5px solid #C7D2FE; margin-bottom:0.75rem;">
-                <strong style="color:#312E81;">🏥 가상 병원 임상 상황</strong><br>
+            <h3 style="margin:0.15rem 0 0.65rem 0; font-size:1.22rem;">{html.escape(clean_title)}</h3>
+            <div style="font-size:0.95rem; background:#F8FAFC; padding:0.95rem 1.2rem; border-radius:14px; border:1.5px solid #E2E8F0; margin-bottom:0.65rem;">
+                <strong style="color:#312E81;">🏥 환자 상황</strong><br>
                 <span style="color:#1E293B;">{html.escape(mission['situation'])}</span>
             </div>
-            <div style="font-size:0.91rem; background:#F0FDFA; padding:0.78rem 1.15rem; border-radius:12px; border:1.5px solid #5EEAD4; color:#0F766E;">
-                <strong>🔎 PBL 핵심 단서</strong> &nbsp;|&nbsp; {clues_html}
+            <div style="font-size:0.9rem; background:#F0FDFA; padding:0.7rem 1.1rem; border-radius:12px; border:1.5px solid #99F6E4; color:#0F766E;">
+                <strong>🔎 핵심 단서</strong> &nbsp;|&nbsp; {clues_html}
             </div>
         </div>
         """
@@ -868,64 +847,55 @@ def render_mission_runner():
 
     c_hint1, c_hint2 = st.columns([1.4, 1])
     with c_hint1:
-        with st.expander("💡 판단이 어려울 때 생각 힌트 열기"):
+        with st.expander("💡 생각 힌트 보기"):
             st.info(mission.get("hint", ""))
     with c_hint2:
-        if st.button("✍️ 개인 서술 예시 문장틀 채우기", key=f"fill_rat_{m_id}", type="secondary", use_container_width=True):
+        if st.button("🪄 서술 예시 문장틀 채우기", key=f"fill_rat_{m_id}", type="secondary", use_container_width=True):
             sample_rat = (
                 f"환자에게서 '{mission['clinical_clues'][0]}' 단서가 관찰되므로, "
-                f"환자 안전과 감염·합병증 예방을 위해 '{mission['options'][mission['correct_index']][:38]}...' 행동을 최우선으로 수행해야 합니다."
+                f"환자 안전과 합병증 예방을 위해 '{mission['options'][mission['correct_index']][:38]}...' 행동을 최우선으로 수행해야 합니다."
             )
             st.session_state[f"rat_{m_id}"] = sample_rat
             st.session_state["hq_pending_sound"] = "chime"
             st.rerun()
 
-    # [개인 자기주도 PBL 해결 폼]
     default_idx = existing_sub["selected_idx"] if existing_sub else 0
     default_rationale = st.session_state.get(f"rat_{m_id}", existing_sub["rationale"] if existing_sub else "")
 
     with st.form(key=f"form_{m_id}", clear_on_submit=False):
         st.markdown(f"#### Q. {mission['question']}")
         selected_option = st.radio(
-            "1) 가장 적절한 간호 판단 선택지 고르기",
+            "1) 가장 알맞은 간호 행동 고르기",
             options=list(range(len(mission["options"]))),
             format_func=lambda idx: f"{idx + 1}번. {mission['options'][idx]}",
             index=default_idx,
             key=f"radio_{m_id}",
         )
-        st.caption(f"📌 서술 가이드: {mission.get('pbl_writing_guide', '관찰한 단서와 판단 이유를 자신의 말로 서술해 보세요.')}")
         rationale_input = st.text_area(
-            f"2) [{level_label}] 개인별 자기주도 PBL 해결방안 및 판단 근거 서술하기",
+            "2) 나의 PBL 판단 근거 한 줄 서술하기",
             value=default_rationale,
-            height=95,
-            placeholder="예: 환자에게 분비물 노출 단서가 있으므로 교차감염을 막기 위해 흐르는 물과 비누로 40~60초간 손을 씻는 것이 가장 안전합니다.",
+            height=85,
+            placeholder=mission.get("pbl_writing_guide", "관찰 단서와 선택한 이유를 한 문장으로 적어보세요."),
         )
-        btn_txt = (
-            f"🔄 [{level_label}] 개인 서술 수정 제출 및 AI 피드백 다시 받기"
-            if existing_sub
-            else f"✅ [{level_label}] 개인 해결안 제출 및 AI 보건튜터 개인 피드백 받기"
-        )
+        btn_txt = "🔄 다시 제출하고 피드백 받기" if existing_sub else "✅ 개인 해결안 제출 & AI 튜터 피드백 받기"
         submitted = st.form_submit_button(btn_txt, type="primary", use_container_width=True)
 
     if submitted:
         st.session_state[f"rat_{m_id}"] = rationale_input
         evaluate_mission_submission(mission, selected_option, rationale_input)
-        st.toast(f"🎵 {level_label} 개인 제출 및 AI 피드백이 완료되었습니다! 진도율이 반영되었습니다.")
+        st.toast(f"🎵 {level_label} 제출 완료! AI 피드백이 도착했습니다.")
         st.rerun()
 
-    # [제출 후: AI 보건튜터 개인별 피드백 출력]
     sub = st.session_state.get("hq_submissions", {}).get(m_id)
     if sub:
         if sub.get("is_correct"):
             _md_html(
                 f"""
                 <div class="hq-card-selected">
-                    <span class="hq-badge-teal">🌟 개인별 제출 완료 · 정확한 임상 판단!</span>
+                    <span class="hq-badge-teal">✨ 정답 & 개인 서술 완료</span>
                     <span class="hq-badge-navy">{html.escape(sub.get('rationale_status', ''))}</span>
-                    <h4 style="margin:0.4rem 0; color:#0F766E;">{html.escape(level_label)} 해결 완료 ({sub['selected_idx'] + 1}번 선택)</h4>
-                    <div style="font-size:0.93rem; background:#FFFFFF; padding:0.8rem 1.05rem; border-radius:10px; border:1.5px solid #99F6E4; margin-bottom:0.5rem;">
-                        <strong>✍️ 나의 개인별 PBL 서술 내용</strong>:<br>
-                        "{html.escape(sub.get('rationale') or '(서술 미입력 — 위 서술란에 이유를 적고 다시 제출하면 더 자세한 피드백을 받을 수 있습니다.)')}"
+                    <div style="font-size:0.92rem; margin-top:0.45rem;">
+                        <strong>✍️ 나의 서술</strong>: "{html.escape(sub.get('rationale') or '(서술 미입력)')}"
                     </div>
                 </div>
                 """
@@ -934,10 +904,9 @@ def render_mission_runner():
             _md_html(
                 f"""
                 <div class="hq-card-coral">
-                    <span class="hq-badge-coral">💪 재검토 코칭 (감점 없음 · 다시 도전해 보세요!)</span>
-                    <h4 style="margin:0.4rem 0; color:#9F1239;">놓친 임상 단서를 확인하고 다시 선택해 보세요</h4>
-                    <div style="font-size:0.92rem; background:#FFFFFF; padding:0.75rem 1rem; border-radius:10px; border:1.5px solid #FECDD3;">
-                        <strong>나의 서술 내용</strong>: "{html.escape(sub.get('rationale') or '-')}"
+                    <span class="hq-badge-coral">💪 재도전 코칭 (감점 없음)</span>
+                    <div style="font-size:0.92rem; margin-top:0.35rem;">
+                        아래 AI 튜터의 힌트를 읽고 다시 선택해 보세요!
                     </div>
                 </div>
                 """
@@ -945,32 +914,29 @@ def render_mission_runner():
 
         st.info(sub.get("ai_individual_feedback", ""))
 
-        with st.expander("📖 1~4번 전체 선택지 상세 해설 및 교과서 참고 출처 확인하기"):
+        with st.expander("📖 1~4번 선택지별 상세 해설 보기"):
             for idx, exp_text in enumerate(mission.get("option_explanations", [])):
                 prefix = "✔ [정답] " if idx == mission.get("correct_index") else f"• [{idx + 1}번] "
                 st.markdown(f"**{prefix}{mission['options'][idx]}**\n  - {exp_text}")
-            ref_src = mission.get("reference_source", "고등학교 보건간호 교육과정 교과서")
-            rev_stat = mission.get("teacher_review_status", mission.get("review_status", "교과서 표준 근거 확인됨"))
-            st.caption(f"참고 출처: {ref_src} | 검토 상태: {rev_stat}")
 
         if active_idx < len(missions) - 1:
-            next_lv = missions[active_idx + 1].get("level_label", f"단계 {active_idx + 2}")
-            if st.button(f"👉 다음 단계 [{next_lv}] 해결하러 이동하기 →", type="primary", use_container_width=True):
+            next_lv = level_tags[min(active_idx + 1, 2)]
+            if st.button(f"👉 다음 미션 [{next_lv}] 도전하기 →", type="primary", use_container_width=True):
                 st.session_state["hq_active_mission_idx"] = active_idx + 1
                 st.session_state["hq_pending_sound"] = "chime"
                 st.rerun()
         else:
-            if st.button("🏆 기초·중급·심화 개인 해결 완료! [STEP 03 · 팀별 협력 & 교사 피드백]으로 이동하기 →", type="primary", use_container_width=True):
+            if st.button("🏆 3단계 모두 완료! [STEP 03 · 팀 협력 & 교사 피드백]으로 이동 →", type="primary", use_container_width=True):
                 st.session_state["hq_nav_view"] = "STEP 03 · 팀 협력 & 교사 피드백"
                 st.session_state["hq_pending_sound"] = "fanfare"
                 st.rerun()
 
 
 # ==============================================================================
-# STEP 03: 팀별 협력 서술 제출 → AI 보건튜터 팀 피드백 → 교사 피드백 & 보고서 제출함·인쇄
+# STEP 03: 팀별 협력 제출 → AI 팀 피드백 → 교사 피드백 & 제출함·인쇄
 # ==============================================================================
 def _build_printable_activity_sheet_html() -> str:
-    """학생 질문(2~3개) + 기초·중급·심화 개인 서술 및 AI 피드백 + 팀 협력 및 AI 팀 피드백 + 교사 최종 피드백이 모두 포함된 디지털 학습지 HTML."""
+    """인쇄 및 파일 제출용 디지털 학습지 HTML."""
     unit_name = st.session_state.get("hq_selected_unit", "")
     scenario = get_current_scenario_data()
     completed, total, pct = get_scenario_progress(scenario)
@@ -980,12 +946,7 @@ def _build_printable_activity_sheet_html() -> str:
     notes = st.session_state.get("hq_team_notes", {})
     qs = get_unit_questions_for_current()
 
-    q_rows = ""
-    if qs:
-        for q_item in qs:
-            q_rows += f"<li><strong>질문 {q_item['q_num']}</strong>: {html.escape(q_item['question'])}</li>"
-    else:
-        q_rows = "<li>(작성된 단원 질문 없음)</li>"
+    q_rows = "".join([f"<li><strong>Q{q['q_num']}</strong>: {html.escape(q['question'])}</li>" for q in qs]) or "<li>(작성된 질문 없음)</li>"
 
     m_rows = ""
     for m in scenario.get("missions", []):
@@ -994,67 +955,58 @@ def _build_printable_activity_sheet_html() -> str:
         if sub:
             choice_str = f"{sub['selected_idx'] + 1}번. {html.escape(sub['selected_text'])}"
             rat_str = html.escape(sub.get("rationale") or "-")
-            fb_short = html.escape(sub.get("rationale_status") or "AI 개인 피드백 완료")
+            fb_short = html.escape(sub.get("rationale_status") or "완료")
         else:
-            choice_str = "(미제출)"
-            rat_str = "-"
-            fb_short = "미제출"
+            choice_str, rat_str, fb_short = "(미제출)", "-", "미제출"
 
         m_rows += f"""
         <tr>
             <td style="font-weight:700; text-align:center;">{html.escape(lv)}</td>
-            <td><strong>{html.escape(m['title'])}</strong><br><span style="font-size:12.5px; color:#334155;">선택: {choice_str}</span></td>
+            <td><strong>{html.escape(_clean_mission_title(m['title']))}</strong><br><span style="font-size:12px; color:#475569;">선택: {choice_str}</span></td>
             <td>{rat_str}</td>
-            <td style="font-size:12.5px; color:#0F766E;">{fb_short}</td>
+            <td style="font-size:12px; color:#0F766E;">{fb_short}</td>
         </tr>
         """
 
-    ai_team_fb_clean = html.escape(notes.get("ai_team_feedback") or "(팀 협력 제출 후 자동 생성됩니다)").replace("\n", "<br>")
-    teacher_fb_clean = html.escape(notes.get("teacher_feedback") or "(교사 피드백 확인 버튼을 누르면 기록됩니다)").replace("\n", "<br>")
+    ai_team_fb_clean = html.escape(notes.get("ai_team_feedback") or "(팀 협력 제출 후 표시됩니다)").replace("\n", "<br>")
+    teacher_fb_clean = html.escape(notes.get("teacher_feedback") or "(교사 피드백 요청 후 표시됩니다)").replace("\n", "<br>")
 
     return f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<title>보건간호 스마트 디지털 PBL 학습지</title>
+<title>보건간호 디지털 PBL 학습지</title>
 <style>
+    @font-face {{
+        font-family: 'NanumSquareRound';
+        src: url('https://fastly.jsdelivr.net/gh/projectnoonnu/noonfonts_two@1.0/NanumSquareRound.woff') format('woff');
+    }}
     body {{
-        font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
-        color: #1E293B; background: #F8FAFC; margin: 16px; line-height: 1.55; word-break: keep-all;
+        font-family: 'NanumSquareRound', 'Malgun Gothic', sans-serif;
+        color: #1E293B; background: #F8FAFC; margin: 14px; line-height: 1.55; word-break: keep-all;
     }}
     .sheet {{
-        max-width: 860px; margin: 0 auto; background: #FFFFFF; border: 2px solid #C7D2FE;
-        border-top: 6px solid #4F46E5; border-radius: 16px; padding: 24px 28px;
-        box-shadow: 0 4px 16px rgba(79, 70, 229, 0.08);
+        max-width: 840px; margin: 0 auto; background: #FFFFFF; border: 2px solid #C7D2FE;
+        border-top: 6px solid #6366F1; border-radius: 16px; padding: 22px 26px;
     }}
     .top-bar {{
-        display: flex; justify-content: space-between; align-items: flex-end;
-        border-bottom: 2px solid #E0E7FF; padding-bottom: 12px; margin-bottom: 14px;
+        display: flex; justify-content: space-between; align-items: center;
+        border-bottom: 2px solid #E0E7FF; padding-bottom: 10px; margin-bottom: 12px;
     }}
-    h1 {{ margin: 0; font-size: 20px; color: #1E1B4B; }}
-    h2 {{
-        font-size: 14.5px; color: #3730A3; margin: 16px 0 6px 0;
-        padding-left: 8px; border-left: 4px solid #4F46E5;
-    }}
+    h1 {{ margin: 0; font-size: 19px; color: #1E1B4B; }}
+    h2 {{ font-size: 14px; color: #4338CA; margin: 14px 0 6px 0; padding-left: 8px; border-left: 4px solid #6366F1; }}
     .meta {{
-        display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px;
-        background: #EEF2FF; border: 1px solid #C7D2FE; border-radius: 10px;
-        padding: 10px 14px; font-size: 13px; margin-bottom: 14px;
+        display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px;
+        background: #EEF2FF; border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px;
     }}
-    table {{ width: 100%; border-collapse: collapse; font-size: 13px; }}
-    th, td {{ border: 1px solid #CBD5E1; padding: 8px 10px; text-align: left; vertical-align: top; }}
-    th {{ background: #EEF2FF; color: #312E81; font-weight: 700; }}
-    .box {{
-        background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 10px;
-        padding: 10px 14px; font-size: 13px; margin-bottom: 10px;
-    }}
-    .teacher-box {{
-        background: #FFFBEB; border: 1.5px solid #FCD34D; border-radius: 10px;
-        padding: 10px 14px; font-size: 13px;
-    }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 12.5px; }}
+    th, td {{ border: 1px solid #CBD5E1; padding: 7px 9px; text-align: left; vertical-align: top; }}
+    th {{ background: #EEF2FF; color: #312E81; }}
+    .box {{ background: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 10px; padding: 9px 13px; font-size: 12.5px; }}
+    .teacher-box {{ background: #FFFBEB; border: 1.5px solid #FCD34D; border-radius: 10px; padding: 9px 13px; font-size: 12.5px; }}
     .print-btn {{
-        background: linear-gradient(135deg, #4F46E5, #0EA5E9); color: #FFFFFF; border: none; border-radius: 10px;
-        padding: 8px 16px; font-size: 13.5px; font-weight: 700; cursor: pointer;
+        background: linear-gradient(135deg, #6366F1, #3B82F6); color: #FFFFFF; border: none;
+        border-radius: 10px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
     }}
     @media print {{ .no-print {{ display: none !important; }} body {{ margin: 0; background: #FFFFFF; }} }}
 </style>
@@ -1063,50 +1015,37 @@ def _build_printable_activity_sheet_html() -> str:
 <div class="sheet">
     <div class="top-bar">
         <div>
-            <h1>{html.escape(SITE_CONFIG['site_title'])} — PBL 디지털 학습 결과지</h1>
-            <div style="font-size:12.5px; color:#64748B;">자기주도 질문 → 기초·중급·심화 개인 PBL → 팀 협력 → AI 튜터 & 교사 피드백 통합 기록표</div>
+            <h1>🩺 {html.escape(SITE_CONFIG['site_title'])} — 디지털 학습 결과지</h1>
         </div>
         <div class="no-print">
-            <button class="print-btn" onclick="window.print()">🖨️ 지금 바로 인쇄 / PDF로 저장</button>
+            <button class="print-btn" onclick="window.print()">🖨️ 인쇄 / PDF 저장</button>
         </div>
     </div>
     <div class="meta">
         <div><strong>학번 / 이름</strong>: {html.escape(student_name or '미입력')}</div>
         <div><strong>모둠명</strong>: {html.escape(group_name or '미입력')}</div>
         <div><strong>학습 단원</strong>: {html.escape(unit_name)}</div>
-        <div><strong>학습 진도율</strong>: {int(pct * 100)}% ({completed}/{total}단계 완료 · {xp} XP)</div>
+        <div><strong>달성 진도율</strong>: {int(pct * 100)}% ({completed}/{total}단계 · {xp} XP)</div>
     </div>
-
-    <h2>1. 나의 단원 질문 (2~3개) 및 AI 보건튜터 개념 피드백 완료</h2>
+    <h2>1. 나의 단원 질문 (2~3개)</h2>
     <div class="box"><ul style="margin:0; padding-left:18px;">{q_rows}</ul></div>
-
-    <h2>2. 기초 · 중급 · 심화 모의실습 개인별 PBL 해결 서술 및 AI 개인 피드백</h2>
+    <h2>2. 기초 · 중급 · 심화 개인별 PBL 해결 기록</h2>
     <table>
         <thead>
-            <tr>
-                <th style="width:14%; text-align:center;">실습 단계</th>
-                <th style="width:32%;">모의실습 상황 및 나의 선택</th>
-                <th style="width:34%;">개인별 자기주도 PBL 해결 서술</th>
-                <th style="width:20%;">AI 보건튜터 개인 피드백</th>
-            </tr>
+            <tr><th style="width:14%;">단계</th><th style="width:32%;">상황 및 선택</th><th style="width:34%;">개인 PBL 근거 서술</th><th style="width:20%;">AI 튜터 확인</th></tr>
         </thead>
         <tbody>{m_rows}</tbody>
     </table>
-
-    <h2>3. 팀별 협력 해결안 최종 서술 및 AI 보건튜터 팀 피드백</h2>
+    <h2>3. 팀 협력 해결안 및 AI 튜터 팀 피드백</h2>
     <div class="box">
-        <div><strong>• 개인별 해결안 요약</strong>: {html.escape(notes.get('individual_summary') or '-')}</div>
-        <div><strong>• 모둠원 의견 비교</strong>: {html.escape(notes.get('peer_comparison') or '-')}</div>
-        <div><strong>• 팀 최종 해결안 및 우선순위 근거</strong>: {html.escape(notes.get('team_conclusion') or '-')}</div>
-        <div><strong>• 토의 후 성장 성찰</strong>: {html.escape(notes.get('thought_change') or '-')}</div>
-        <hr style="border:none; border-top:1px dashed #CBD5E1; margin:8px 0;">
+        <div><strong>• 팀원 의견 비교</strong>: {html.escape(notes.get('peer_comparison') or '-')}</div>
+        <div><strong>• 팀 최종 해결안</strong>: {html.escape(notes.get('team_conclusion') or '-')}</div>
+        <div><strong>• 협력 성찰</strong>: {html.escape(notes.get('thought_change') or '-')}</div>
+        <hr style="border:none; border-top:1px dashed #CBD5E1; margin:7px 0;">
         <div style="color:#0F766E;">{ai_team_fb_clean}</div>
     </div>
-
     <h2>4. 담당 교사 최종 피드백</h2>
-    <div class="teacher-box">
-        <strong>👩‍🏫 교사 종합 코멘트</strong><br>{teacher_fb_clean}
-    </div>
+    <div class="teacher-box"><strong>👩‍🏫 교사 종합 피드백</strong><br>{teacher_fb_clean}</div>
 </div>
 </body>
 </html>"""
@@ -1119,9 +1058,8 @@ def render_collaboration_and_growth():
     notes = st.session_state.get("hq_team_notes", {})
 
     render_simple_guide(
-        step_tag="STEP 03 · 팀별 협력 제출 & AI·교사 피드백 완성",
-        now_do="기초·중급·심화 개인 서술 내용을 바탕으로 팀별 협력 해결안을 작성해 [AI 보건튜터 팀 피드백]을 받고, 마지막으로 [교사 피드백]을 확인해 선생님께 최종 보고서를 제출하세요.",
-        why_do="개인 자기주도학습 → 팀 협력 문제해결 → AI 튜터 피드백 → 교사 최종 피드백으로 이어지는 완전학습 루프를 완성합니다.",
+        step_tag="🏆 STEP 03",
+        now_do="팀 협력 해결안을 작성해 AI 팀 피드백과 교사 최종 피드백을 받고 선생님께 보고서를 제출하세요!",
     )
 
     auto_ind_lines = []
@@ -1132,65 +1070,33 @@ def render_collaboration_and_growth():
             auto_ind_lines.append(f"[{lv}] {s['rationale']}")
         elif s:
             auto_ind_lines.append(f"[{lv}] {s['selected_idx']+1}번 선택 완료")
-    auto_ind_summary = (
-        " / ".join(auto_ind_lines)
-        if auto_ind_lines
-        else "기초·중급·심화 모의실습에서 환자 안전과 관찰·보고 원칙에 따라 간호 우선순위를 판단함."
-    )
+    auto_ind_summary = " / ".join(auto_ind_lines) if auto_ind_lines else "환자 안전과 관찰·보고 원칙에 따라 기초·중급·심화 간호 우선순위를 판단함."
 
-    st.markdown("#### 🤝 1. 개인별 서술 종합 및 팀별 협력 해결안 최종 제출")
-    c_fill, c_cap = st.columns([1.15, 2.1])
+    c_hdr, c_fill = st.columns([1.8, 1])
+    with c_hdr:
+        st.markdown("#### 🤝 1. 개인 서술 종합 & 팀 협력 해결안 작성")
     with c_fill:
-        if st.button("✨ 팀 협력 서술 예시 문장틀 자동 채우기", type="secondary", use_container_width=True):
+        if st.button("🪄 팀 협력 예시 자동 채우기", type="secondary", use_container_width=True):
             st.session_state["hq_team_notes"]["individual_summary"] = auto_ind_summary
-            st.session_state["hq_team_notes"]["peer_comparison"] = (
-                "나는 기초·중급 단계의 개별 처치 절차에 집중했는데, 팀원들은 주변 환자 분리와 손상성 폐기물 즉시 처리 등 환경 안전 단서까지 함께 짚어주었다."
-            )
-            st.session_state["hq_team_notes"]["team_conclusion"] = (
-                "1순위: 표준주의 보호구 착용 및 환자·주변 안전 확보 → 2순위: 정확한 활력징후·증상 사정 후 담당 간호사·의사 즉시 보고 → 3순위: 침습적 처치 금지 및 환자 안정·교육 시행"
-            )
-            st.session_state["hq_team_notes"]["thought_change"] = (
-                "혼자 판단할 때 놓치기 쉬운 임상 단서를 팀원들과 비교하며 훨씬 안전한 간호 우선순위를 세울 수 있었고, 예비 의료인의 법적 업무 경계를 명확히 깨달았다."
-            )
+            st.session_state["hq_team_notes"]["peer_comparison"] = "나는 개별 처치 절차에 집중했는데, 팀원들은 주변 환자 분리와 환경 안전 단서까지 함께 짚어주었다."
+            st.session_state["hq_team_notes"]["team_conclusion"] = "1순위: 보호구 착용 및 안전 확보 → 2순위: 활력징후·증상 사정 후 즉시 보고 → 3순위: 비침습적 안정 간호 시행"
+            st.session_state["hq_team_notes"]["thought_change"] = "팀원들과 임상 단서를 비교하며 더 안전한 간호 우선순위를 세울 수 있었고 업무 경계를 명확히 이해했다."
             st.session_state["hq_pending_sound"] = "chime"
             st.rerun()
-    with c_cap:
-        st.caption("※ 기초·중급·심화에서 작성한 나의 개인 서술이 아래 ①번 칸에 자동 연동됩니다.")
 
     with st.form("team_collab_form", clear_on_submit=False):
         c1, c2 = st.columns(2)
         with c1:
-            s_name_in = st.text_input("학번 및 이름 (필수)", value=st.session_state.get("hq_student_label", ""), placeholder="예: 2학년 1반 홍길동")
+            s_name_in = st.text_input("👤 학번 및 이름", value=st.session_state.get("hq_student_label", ""), placeholder="예: 2학년 1반 홍길동")
         with c2:
-            g_name_in = st.text_input("팀(모둠) 이름", value=st.session_state.get("hq_group_label", ""), placeholder="예: 나이팅게일 1모둠")
+            g_name_in = st.text_input("👥 모둠 이름", value=st.session_state.get("hq_group_label", ""), placeholder="예: 나이팅게일 1모둠")
 
-        ind_sum_in = st.text_area(
-            "① [개인별 서술 종합] 기초·중급·심화 모의실습에서 내가 작성한 핵심 해결 내용",
-            value=notes.get("individual_summary") or auto_ind_summary,
-            height=68,
-        )
-        peer_comp_in = st.text_input(
-            "② [팀원과 근거 비교] 내 생각과 팀원들의 생각은 어떤 점이 같거나 달랐나요?",
-            value=notes.get("peer_comparison", ""),
-            placeholder="예: 나는 손 씻기만 생각했는데 팀원은 환자 간 거리 확보와 즉시 보고까지 제시해 주었다.",
-        )
-        team_conc_in = st.text_area(
-            "③ [팀별 협력 최종 해결안] 기초·중급·심화를 종합하여 우리 팀이 합의한 최종 간호 우선순위와 근거",
-            value=notes.get("team_conclusion", ""),
-            height=78,
-            placeholder="예: 1순위 보호구 착용 및 감염 차단 → 2순위 환자 증상 관찰 및 즉시 보고 → 3순위 비침습적 안정 간호",
-        )
-        thought_chg_in = st.text_input(
-            "④ [협력 성찰] 개인 학습 후 팀 토의를 거치며 새롭게 깨닫거나 성장한 점",
-            value=notes.get("thought_change", ""),
-            placeholder="예: 응급 상황일수록 기본 원칙을 생략하지 않고 팀원들과 단서를 교차 확인해야 환자가 안전하다는 점을 배웠다.",
-        )
+        ind_sum_in = st.text_area("① 개인별 해결 내용 요약 (자동 연동)", value=notes.get("individual_summary") or auto_ind_summary, height=62)
+        peer_comp_in = st.text_input("② 팀원과 생각 비교 (같거나 달랐던 점)", value=notes.get("peer_comparison", ""))
+        team_conc_in = st.text_area("③ 우리 팀 최종 해결안 및 우선순위 근거", value=notes.get("team_conclusion", ""), height=68)
+        thought_chg_in = st.text_input("④ 팀 토의 후 새롭게 배운 점", value=notes.get("thought_change", ""))
 
-        team_sub_btn = st.form_submit_button(
-            "✅ 팀별 협력 해결안 최종 제출 및 AI 보건튜터 팀 피드백 받기",
-            type="primary",
-            use_container_width=True,
-        )
+        team_sub_btn = st.form_submit_button("✅ 팀 해결안 제출 & AI 튜터 팀 피드백 받기", type="primary", use_container_width=True)
 
     if team_sub_btn:
         submit_team_collaboration_and_get_feedback(
@@ -1201,36 +1107,29 @@ def render_collaboration_and_growth():
             team_conclusion=team_conc_in,
             thought_change=thought_chg_in,
         )
-        st.toast("🎶 팀별 협력 해결안이 제출되어 AI 보건튜터 팀 피드백이 생성되었습니다!")
+        st.toast("🎶 AI 보건튜터 팀 피드백이 생성되었습니다!")
         st.rerun()
 
     updated_notes = st.session_state.get("hq_team_notes", {})
     if updated_notes.get("ai_team_feedback"):
-        st.markdown("#### 🤖 2. 팀별 제출 내용에 대한 AI 보건튜터 피드백")
+        st.markdown("#### 🤖 2. AI 보건튜터 팀 피드백")
         st.info(updated_notes["ai_team_feedback"])
 
-    _md_html("<hr style='margin: 1.3rem 0; border-color: #C7D2FE;'>")
+    _md_html("<hr style='margin: 1.1rem 0; border-color: #E0E7FF;'>")
 
-    # 3) 마지막 단계: 교사의 피드백 받기 및 선생님 제출함에 등록
-    st.markdown("#### 👩‍🏫 3. 마지막 단계: 담당 교사 피드백 받기 & 선생님께 보고서 제출하기")
-    st.caption("※ 개인별 AI 피드백과 팀별 AI 피드백을 확인한 뒤 아래 버튼을 누르면 교사 종합 피드백이 기록되고 선생님의 제출 관리함에 자동 등록됩니다.")
-
-    col_t1, col_t2 = st.columns([1.25, 1.75])
+    st.markdown("#### 👩‍🏫 3. 교사 최종 피드백 & 선생님께 보고서 제출")
+    col_t1, col_t2 = st.columns([1.2, 1.8])
     with col_t1:
-        if st.button("📤 선생님께 최종 보고서 제출 & 교사 피드백 확인하기", type="primary", use_container_width=True):
+        if st.button("📤 선생님께 최종 제출 & 교사 피드백 확인", type="primary", use_container_width=True):
             entry = submit_final_report_to_teacher()
             if not st.session_state.get("hq_reduce_motion", False):
                 st.balloons()
-            st.toast(f"🎉 [{entry['student_name']}] 학생의 최종 보고서가 교사용 제출함에 저장되었습니다!")
+            st.toast(f"🎉 [{entry['student_name']}] 최종 보고서가 선생님 제출함에 등록되었습니다!")
             st.rerun()
     with col_t2:
-        with st.expander("👩‍🏫 교사용 직접 코멘트 입력/수정 (선생님 전용)"):
-            custom_t = st.text_area(
-                "교사 지도 코멘트 직접 입력",
-                value=updated_notes.get("teacher_feedback", ""),
-                placeholder="학생 개인 서술과 팀 협력 결과에 대한 선생님의 피드백을 입력하면 학습지에 그대로 인쇄됩니다.",
-            )
-            if st.button("교사 코멘트 적용하기", type="secondary"):
+        with st.expander("👩‍🏫 교사 직접 코멘트 작성 (선생님 전용)"):
+            custom_t = st.text_area("교사 코멘트 입력", value=updated_notes.get("teacher_feedback", ""))
+            if st.button("코멘트 저장", type="secondary"):
                 generate_or_save_teacher_feedback(custom_t)
                 st.rerun()
 
@@ -1239,65 +1138,53 @@ def render_collaboration_and_growth():
         _md_html(
             f"""
             <div class="hq-card-teacher">
-                <span class="hq-badge-adv">🌟 담당 교사 최종 피드백 & 보고서 등록 완료</span>
-                <h4 style="margin:0.35rem 0; color:#92400E;">👩‍🏫 교사 종합 지도 피드백</h4>
-                <div style="font-size:0.94rem; color:#1E293B;">{html.escape(updated_notes['teacher_feedback'])}</div>
+                <span class="hq-badge-adv">✨ 교사 피드백 & 제출 완료</span>
+                <div style="font-size:0.93rem; color:#1E293B; margin-top:0.35rem;">{html.escape(updated_notes['teacher_feedback'])}</div>
             </div>
             """
         )
 
-    _md_html("<hr style='margin: 1.3rem 0; border-color: #C7D2FE;'>")
+    _md_html("<hr style='margin: 1.1rem 0; border-color: #E0E7FF;'>")
 
-    # 4) 완성된 스마트 디지털 학습지 저장·인쇄 & 교사용 제출물 통합 관리함
-    st.markdown("#### 🖨️ 4. 완성된 스마트 디지털 학습지 저장·인쇄 및 교사용 제출물 관리함")
+    st.markdown("#### 🖨️ 4. 학습지 저장·인쇄 & 교사용 제출물 관리함")
     sheet_html = _build_printable_activity_sheet_html()
+    reports_cnt = len(load_submitted_reports())
 
     d_col1, d_col2 = st.columns(2, gap="medium")
     with d_col1:
         st.download_button(
-            label="📥 학생용: 내 디지털 학습지 결과 파일(.html) 저장하기",
+            label="📥 내 디지털 학습지 파일(.html) 저장",
             data=sheet_html,
-            file_name=f"보건간호_PBL_디지털학습지_{st.session_state.get('hq_student_label') or '학생'}.html",
+            file_name=f"보건간호_디지털학습지_{st.session_state.get('hq_student_label') or '학생'}.html",
             mime="text/html",
             type="primary",
             use_container_width=True,
         )
     with d_col2:
-        csv_bytes = export_submitted_reports_csv()
-        reports_cnt = len(load_submitted_reports())
         st.download_button(
-            label=f"📊 교사용: 제출된 학생 보고서 전체 엑셀(CSV) 다운로드 ({reports_cnt}명)",
-            data=csv_bytes,
+            label=f"📊 교사용: 제출 보고서 엑셀(CSV) 다운로드 ({reports_cnt}명)",
+            data=export_submitted_reports_csv(),
             file_name="HEALTH_QUEST_학생제출보고서_전체목록.csv",
             mime="text/csv",
             use_container_width=True,
         )
 
-    with st.expander(f"📂 [교사용 제출물 통합 관리함 열기] 현재 제출 완료된 학생 보고서 ({reports_cnt}건 확인 및 관리)"):
+    with st.expander(f"📂 교사용 제출물 통합 관리함 ({reports_cnt}건 확인)"):
         all_reps = load_submitted_reports()
         if not all_reps:
-            st.caption("아직 제출된 보고서가 없습니다. 위 [📤 선생님께 최종 보고서 제출 & 교사 피드백 확인하기] 버튼을 누르면 즉시 이곳에 집계됩니다.")
+            st.caption("아직 제출된 보고서가 없습니다.")
         else:
-            st.caption("※ 학생이 제출한 학번/이름, 단원, 진도율, 질문(2~3개), 기초·중급·심화 서술, 팀 최종 해결안이 자동 기록됩니다. 상단 [엑셀(CSV) 다운로드] 버튼으로 한 번에 내려받아 수행평가 채점에 활용하세요.")
             for idx, r in enumerate(reversed(all_reps), start=1):
                 _md_html(
                     f"""
-                    <div class="hq-card" style="padding:0.9rem 1.2rem; margin-bottom:0.55rem;">
-                        <div style="display:flex; justify-content:space-between; flex-wrap:wrap;">
-                            <div>
-                                <span class="hq-badge-teal">#{idx} · {html.escape(r.get('student_name', ''))} ({html.escape(r.get('group_name', ''))})</span>
-                                <span class="hq-badge-inter">{html.escape(r.get('unit_name', ''))}</span>
-                                <span class="hq-badge-adv">진도율 {r.get('progress_pct', 0)}% · {r.get('xp', 0)} XP</span>
-                            </div>
-                            <div style="font-size:0.8rem; color:#64748B;">제출일시: {html.escape(r.get('submitted_at', ''))}</div>
-                        </div>
-                        <div style="font-size:0.86rem; color:#334155; margin-top:0.35rem;">
-                            <strong>• 기초/중급/심화 서술</strong>: {html.escape(r.get('basic_mission', '')[:60])}...<br>
-                            <strong>• 팀 최종 해결안</strong>: {html.escape(r.get('team_conclusion', '') or '(미입력)')}
-                        </div>
+                    <div class="hq-card" style="padding:0.8rem 1.1rem; margin-bottom:0.5rem;">
+                        <span class="hq-badge-teal">#{idx} {html.escape(r.get('student_name', ''))} ({html.escape(r.get('group_name', ''))})</span>
+                        <span class="hq-badge-inter">{html.escape(r.get('unit_name', ''))}</span>
+                        <span class="hq-badge-adv">진도율 {r.get('progress_pct', 0)}%</span>
+                        <span style="font-size:0.78rem; color:#64748B; float:right;">{html.escape(r.get('submitted_at', ''))}</span>
                     </div>
                     """
                 )
 
-    with st.expander("📄 완성된 디지털 학습지 인쇄용 미리보기 열기", expanded=True):
-        components.html(sheet_html, height=640, scrolling=True)
+    with st.expander("📄 디지털 학습지 인쇄용 미리보기", expanded=True):
+        components.html(sheet_html, height=600, scrolling=True)
