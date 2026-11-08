@@ -56,6 +56,7 @@ if current_nav not in NAV_OPTIONS:
 
 def _on_sidebar_nav_change():
     st.session_state["hq_nav_view"] = st.session_state["hq_sidebar_nav_radio"]
+    st.session_state["hq_pending_sound"] = "pop"
 
 
 # ---------------------------------------------------------
@@ -139,6 +140,7 @@ with st.sidebar:
     if st.button("🏠 처음 단계(STEP 01)로 이동", use_container_width=True):
         st.session_state["hq_active_mission_idx"] = 0
         st.session_state["hq_nav_view"] = NAV_OPTIONS[0]
+        st.session_state["hq_pending_sound"] = "pop"
         st.rerun()
 
     _md_html("<hr style='margin: 0.65rem 0; border-color: #C7D2FE;'>")

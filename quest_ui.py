@@ -1,5 +1,6 @@
 """HEALTH QUEST — 사설 스마트 디지털 학습지 스타일 UI·UX 모듈 (다채로운 파스텔·그라데이션 컬러, 입체 3D 인터랙티브 버튼, Web Audio 효과음, 교사용 제출물 관리함 포함)."""
 import html
+import random
 import streamlit as st
 import streamlit.components.v1 as components
 from quest_data import SITE_CONFIG
@@ -31,7 +32,7 @@ def _md_html(raw_html: str):
 
 
 def inject_quest_css(reduce_motion: bool = False):
-    """사설 스마트 디지털 학습지(아이스크림·엘리하이·밀크T 감성) 컬러 팔레트 및 입체 인터랙션 CSS."""
+    """사설 스마트 디지털 학습지(아이스크림·엘리하이·밀크T 감성) 컬러 팔레트 및 입체 인터랙션 CSS (외부 CDN 블로킹 제거로 즉시 렌더링)."""
     motion_css = (
         """
         *, *::before, *::after {
@@ -48,8 +49,6 @@ def inject_quest_css(reduce_motion: bool = False):
     _md_html(
         f"""
         <style>
-        @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-
         :root {{
             color-scheme: light !important;
         }}
@@ -57,7 +56,7 @@ def inject_quest_css(reduce_motion: bool = False):
             background: linear-gradient(165deg, #EEF2FF 0%, #F0FDF4 48%, #FFFBEB 100%) !important;
             background-attachment: fixed !important;
             color: #1E293B !important;
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, 'Malgun Gothic', sans-serif !important;
+            font-family: 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', -apple-system, BlinkMacSystemFont, sans-serif !important;
             letter-spacing: -0.015em !important;
             word-spacing: 0.02em !important;
             overflow-x: hidden !important;
@@ -84,7 +83,7 @@ def inject_quest_css(reduce_motion: bool = False):
         }}
         h1, h2, h3, h4 {{
             color: #0F172A !important;
-            font-family: 'Pretendard', sans-serif !important;
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif !important;
             letter-spacing: -0.025em !important;
             line-height: 1.36 !important;
             word-break: keep-all !important;
@@ -474,22 +473,22 @@ def inject_quest_css(reduce_motion: bool = False):
 
 def render_sound_effects():
     """
-    Web Audio API를 이용해 외부 음원 파일 없이도 경쾌한 버튼 클릭음(통통 튀는 팝 사운드)과
-    미션 해결/피드백 완료 시 맑은 효과음(차임벨·팡파르)을 들려주는 사운드 엔진.
+    버튼 클릭 및 미션 이벤트 발생 시(`hq_pending_sound`가 있을 때만) 초경량 Web Audio API 사운드를 재생합니다.
+    초기 페이지 접속 시에는 불필요한 iframe을 렌더링하지 않아 share.streamlit.io 로딩 속도를 즉시(0초)로 보장합니다.
     """
     sound_enabled = st.session_state.get("hq_sound_enabled", True)
     pending_sound = st.session_state.pop("hq_pending_sound", None)
-    if not sound_enabled:
+    if not sound_enabled or not pending_sound:
         return
 
-    sound_type_js = f"'{pending_sound}'" if pending_sound else "null"
+    nonce = random.randint(1000, 999999)
     components.html(
         f"""
         <script>
         (function() {{
+            // nonce: {nonce}
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
             if (!AudioCtx) return;
-
             function playToneSequence(notes) {{
                 try {{
                     const ctx = new AudioCtx();
@@ -499,7 +498,7 @@ def render_sound_effects():
                         const gain = ctx.createGain();
                         osc.type = n.type || 'sine';
                         osc.frequency.setValueAtTime(n.freq, now + (n.delay || 0));
-                        gain.gain.setValueAtTime(n.vol || 0.12, now + (n.delay || 0));
+                        gain.gain.setValueAtTime(n.vol || 0.13, now + (n.delay || 0));
                         gain.gain.exponentialRampToValueAtTime(0.001, now + (n.delay || 0) + n.dur);
                         osc.connect(gain);
                         gain.connect(ctx.destination);
@@ -508,64 +507,41 @@ def render_sound_effects():
                     }});
                 }} catch (e) {{}}
             }}
-
-            // 1) 이벤트성 효과음 재생 (질문 등록, 정답, 재도전, 완주 팡파르)
-            const pending = {sound_type_js};
-            if (pending === 'chime') {{
+            const pending = '{pending_sound}';
+            if (pending === 'pop') {{
                 playToneSequence([
-                    {{freq: 523.25, delay: 0, dur: 0.14, vol: 0.13, type: 'triangle'}},
-                    {{freq: 659.25, delay: 0.10, dur: 0.16, vol: 0.13, type: 'triangle'}},
-                    {{freq: 783.99, delay: 0.20, dur: 0.26, vol: 0.15, type: 'triangle'}}
+                    {{freq: 660, delay: 0, dur: 0.07, vol: 0.12, type: 'sine'}},
+                    {{freq: 880, delay: 0.05, dur: 0.08, vol: 0.12, type: 'sine'}}
+                ]);
+            }} else if (pending === 'chime') {{
+                playToneSequence([
+                    {{freq: 523.25, delay: 0, dur: 0.13, vol: 0.14, type: 'triangle'}},
+                    {{freq: 659.25, delay: 0.09, dur: 0.15, vol: 0.14, type: 'triangle'}},
+                    {{freq: 783.99, delay: 0.18, dur: 0.24, vol: 0.15, type: 'triangle'}}
                 ]);
             }} else if (pending === 'success') {{
                 playToneSequence([
-                    {{freq: 587.33, delay: 0, dur: 0.12, vol: 0.14, type: 'sine'}},
-                    {{freq: 739.99, delay: 0.09, dur: 0.14, vol: 0.14, type: 'sine'}},
-                    {{freq: 880.00, delay: 0.18, dur: 0.28, vol: 0.16, type: 'triangle'}}
+                    {{freq: 587.33, delay: 0, dur: 0.11, vol: 0.15, type: 'sine'}},
+                    {{freq: 739.99, delay: 0.09, dur: 0.13, vol: 0.15, type: 'sine'}},
+                    {{freq: 880.00, delay: 0.18, dur: 0.26, vol: 0.17, type: 'triangle'}}
                 ]);
             }} else if (pending === 'try_again') {{
                 playToneSequence([
-                    {{freq: 440.00, delay: 0, dur: 0.14, vol: 0.11, type: 'sine'}},
-                    {{freq: 392.00, delay: 0.12, dur: 0.22, vol: 0.11, type: 'sine'}}
+                    {{freq: 440.00, delay: 0, dur: 0.13, vol: 0.12, type: 'sine'}},
+                    {{freq: 392.00, delay: 0.11, dur: 0.20, vol: 0.12, type: 'sine'}}
                 ]);
             }} else if (pending === 'fanfare') {{
                 playToneSequence([
-                    {{freq: 523.25, delay: 0, dur: 0.13, vol: 0.15, type: 'triangle'}},
-                    {{freq: 659.25, delay: 0.11, dur: 0.13, vol: 0.15, type: 'triangle'}},
-                    {{freq: 783.99, delay: 0.22, dur: 0.14, vol: 0.15, type: 'triangle'}},
-                    {{freq: 1046.50, delay: 0.34, dur: 0.38, vol: 0.18, type: 'triangle'}}
+                    {{freq: 523.25, delay: 0, dur: 0.12, vol: 0.15, type: 'triangle'}},
+                    {{freq: 659.25, delay: 0.10, dur: 0.12, vol: 0.15, type: 'triangle'}},
+                    {{freq: 783.99, delay: 0.20, dur: 0.13, vol: 0.15, type: 'triangle'}},
+                    {{freq: 1046.50, delay: 0.31, dur: 0.35, vol: 0.18, type: 'triangle'}}
                 ]);
             }}
-
-            // 2) 부모 문서의 모든 버튼에 귀여운 '팝(Pop)' 클릭 효과음 연결
-            try {{
-                const parentDoc = window.parent.document;
-                if (!parentDoc._hqClickSoundAttached) {{
-                    parentDoc.addEventListener('pointerdown', function(ev) {{
-                        const btn = ev.target.closest('button, [ role="radio" ]');
-                        if (!btn) return;
-                        try {{
-                            const ctx = new AudioCtx();
-                            const osc = ctx.createOscillator();
-                            const gain = ctx.createGain();
-                            osc.type = 'sine';
-                            osc.frequency.setValueAtTime(620, ctx.currentTime);
-                            osc.frequency.exponentialRampToValueAtTime(920, ctx.currentTime + 0.065);
-                            gain.gain.setValueAtTime(0.09, ctx.currentTime);
-                            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.07);
-                            osc.connect(gain);
-                            gain.connect(ctx.destination);
-                            osc.start();
-                            osc.stop(ctx.currentTime + 0.075);
-                        }} catch (err) {{}}
-                    }}, true);
-                    parentDoc._hqClickSoundAttached = true;
-                }}
-            }} catch (e) {{}}
         }})();
         </script>
         """,
-        height=0,
+        height=1,
     )
 
 
@@ -678,7 +654,7 @@ def render_unit_inquiry_and_scenario_selection():
                     use_container_width=True,
                 ):
                     st.session_state["hq_selected_term_idx"] = i
-                    st.session_state["hq_pending_sound"] = "chime"
+                    st.session_state["hq_pending_sound"] = "pop"
                     st.rerun()
 
         sel_t_name, sel_t_desc = term_items[cur_t_idx]
@@ -863,6 +839,7 @@ def render_mission_runner():
                 use_container_width=True,
             ):
                 st.session_state["hq_active_mission_idx"] = i
+                st.session_state["hq_pending_sound"] = "pop"
                 st.rerun()
 
     # [제시문 카드] 모의실습 상황 및 핵심 임상 단서
@@ -1041,7 +1018,6 @@ def _build_printable_activity_sheet_html() -> str:
 <meta charset="utf-8">
 <title>보건간호 스마트 디지털 PBL 학습지</title>
 <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
     body {{
         font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
         color: #1E293B; background: #F8FAFC; margin: 16px; line-height: 1.55; word-break: keep-all;
@@ -1323,4 +1299,5 @@ def render_collaboration_and_growth():
                     """
                 )
 
-    components.html(sheet_html, height=680, scrolling=True)
+    with st.expander("📄 완성된 디지털 학습지 인쇄용 미리보기 열기", expanded=True):
+        components.html(sheet_html, height=640, scrolling=True)

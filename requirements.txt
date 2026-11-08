@@ -1,6 +1,5 @@
-openai-agents
+﻿openai-agents==0.23.1
+streamlit==1.65.0
 openai
-streamlit
-uv
 requests
 beautifulsoup4
