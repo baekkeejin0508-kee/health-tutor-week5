@@ -41,7 +41,7 @@ def init_quest_state():
     """세션 상태 초기화 (새로고침 전까지 현재 브라우저 세션에서 유지)."""
     defaults = {
         "hq_site_title": "HEALTH QUEST — 예비 보건의료인의 미션룸",
-        "hq_nav_view": "🏠 1단계: 오늘의 미션",
+        "hq_nav_view": "STEP 01 · 오늘의 미션",
         "hq_selected_unit": "감염관리 (표준주의와 격리간호)",
         "hq_selected_scenario_id": "INF_A",
         "hq_active_mission_idx": 0,  # 0, 1, 2
