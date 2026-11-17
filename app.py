@@ -8,6 +8,8 @@ from quest_ai import get_ai_status
 from quest_data import SITE_CONFIG, UNIT_CATALOG
 from quest_engine import (
     export_submitted_reports_xlsx,
+    get_current_scenario_data,
+    get_scenario_progress,
     init_quest_state,
     load_submitted_reports,
 )
@@ -228,5 +230,46 @@ elif active_view == "STEP 02 · 기초·중급·심화 실습":
 
 elif active_view == "STEP 03 · 팀 협력 & 교사 피드백":
     render_collaboration_and_growth()
+
+
+if st.session_state.get("hq_integrated_mode", False):
+    current_scenario = get_current_scenario_data()
+    completed_missions, total_missions, _ = get_scenario_progress(current_scenario)
+
+    if total_missions > 0 and completed_missions == total_missions:
+        with st.container(border=True, key="integrated_simulation_launch"):
+            st.subheader("간호 미션 완료 · 모의상황실습 열림", icon=":material/verified:")
+            st.markdown(
+                "지금까지의 판단 경험을 바탕으로 질문 2~3개를 작성하고, "
+                "RAG 보건튜터가 제시하는 병원 모의실습 상황을 해결해 보세요."
+            )
+            if st.button(
+                "모의상황실습 시작",
+                key="integrated_simulation_start",
+                icon=":material/biotech:",
+                type="primary",
+                width="stretch",
+            ):
+                selected_unit = st.session_state.get("hq_selected_unit", "")
+                selected_subject = UNIT_CATALOG.get(selected_unit, {}).get("subject", "보건간호")
+                if st.session_state.get("ragpbl_last_unit") != selected_unit:
+                    rag_state_defaults = {
+                        "ragpbl_discovery": None,
+                        "ragpbl_selected_id": None,
+                        "ragpbl_review": None,
+                        "ragpbl_attempts": 0,
+                        "ragpbl_source_mode": "",
+                        "ragpbl_questions": [],
+                        "ragpbl_prior_knowledge": "",
+                        "ragpbl_last_error": "",
+                    }
+                    for state_key, default_value in rag_state_defaults.items():
+                        st.session_state[state_key] = default_value
+                st.session_state["ragpbl_subject"] = selected_subject
+                st.session_state["ragpbl_unit"] = selected_unit
+                st.session_state["ragpbl_last_unit"] = selected_unit
+                st.session_state["ragpbl_entry_source"] = "mission_room"
+                st.session_state["hq_pending_sound"] = "chime"
+                st.switch_page("app_rag_pbl.py")
 
 render_sound_effects()

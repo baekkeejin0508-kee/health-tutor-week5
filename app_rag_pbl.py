@@ -281,6 +281,13 @@ scenario = selected_scenario()
 review: PBLReview | None = st.session_state.ragpbl_review
 stage = 4 if review else 3 if scenario else 2 if discovery else 1
 
+if st.session_state.get("hq_integrated_mode", False) and st.session_state.get("ragpbl_entry_source") == "mission_room":
+    st.info(
+        "간호 미션룸에서 완료한 교과목과 단원을 이어받았습니다. "
+        "이제 배운 내용에서 궁금한 질문을 자신의 말로 적어 보세요.",
+        icon=":material/route:",
+    )
+
 with st.container(key="ragpbl_hero"):
     st.title("HEALTH QUEST — RAG PBL 실습실")
     st.markdown("학생의 질문을 수업 근거와 연결해 나만의 임상 모의실습을 설계합니다.")
