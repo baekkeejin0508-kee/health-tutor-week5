@@ -31,6 +31,59 @@ st.set_page_config(
     layout="wide",
 )
 
+st.html(
+    """
+    <style>
+    .st-key-ragpbl_hero {
+        background: linear-gradient(135deg, #eaf2ff 0%, #dce9ff 58%, #f3f7ff 100%);
+        border: 1px solid #bfd2f2;
+        border-radius: 24px;
+        box-shadow: 0 14px 34px rgba(60, 91, 143, 0.10);
+        padding: 1.9rem 2rem 1.7rem;
+    }
+
+    .st-key-ragpbl_hero h1 {
+        color: #19365f;
+        font-size: clamp(2rem, 3vw, 3.15rem);
+        letter-spacing: -0.035em;
+        line-height: 1.18;
+    }
+
+    .st-key-ragpbl_hero p {
+        color: #314b70;
+    }
+
+    .st-key-ragpbl_question_help details {
+        background: linear-gradient(135deg, #fdebe6 0%, #f9ddd7 100%);
+        border: 1px solid #efbfb4;
+        border-radius: 16px;
+        box-shadow: 0 8px 20px rgba(151, 82, 68, 0.08);
+        overflow: hidden;
+    }
+
+    .st-key-ragpbl_question_help details > summary {
+        color: #6f3d35;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+    }
+
+    .st-key-ragpbl_discovery_form {
+        background: rgba(255, 253, 249, 0.92);
+        border-color: #d8e2ef;
+        border-radius: 20px;
+        box-shadow: 0 10px 28px rgba(40, 57, 83, 0.06);
+    }
+
+    @media (max-width: 700px) {
+        .st-key-ragpbl_hero {
+            border-radius: 18px;
+            padding: 1.3rem 1.15rem 1.2rem;
+        }
+    }
+    </style>
+    """
+)
+
 
 STATE_DEFAULTS = {
     "ragpbl_discovery": None,
@@ -197,7 +250,6 @@ subjects = sorted({unit.get("subject", "보건간호") for unit in UNIT_CATALOG.
 with st.sidebar:
     st.header("RAG PBL 실습실", icon=":material/clinical_notes:")
     st.caption("질문에서 시작하는 단일 AI 보건튜터")
-    st.badge("기존 간호 미션룸과 별도 앱", color="blue")
 
     subject = st.selectbox("교과목", subjects, key="ragpbl_subject")
     units = [name for name, value in UNIT_CATALOG.items() if value.get("subject") == subject]
@@ -207,17 +259,11 @@ with st.sidebar:
         reset_learning()
     st.session_state.ragpbl_last_unit = unit_name
 
-    if status["configured"]:
-        st.success(
-            f"교과서·공공자료 RAG 연결됨 — 지식 저장소 {status['source_count']}개",
-            icon=":material/database:",
-        )
-    else:
+    if not status["configured"]:
         st.warning(
             "서버 RAG 설정이 없어 현재 단원 데이터 시연 모드로 실행됩니다.",
             icon=":material/warning:",
         )
-    st.caption(f"모델: {status['model']}")
 
     if st.button("새 학습 시작", icon=":material/restart_alt:", width="stretch"):
         reset_learning()
@@ -235,7 +281,7 @@ scenario = selected_scenario()
 review: PBLReview | None = st.session_state.ragpbl_review
 stage = 4 if review else 3 if scenario else 2 if discovery else 1
 
-with st.container(border=True):
+with st.container(key="ragpbl_hero"):
     st.title("HEALTH QUEST — RAG PBL 실습실")
     st.markdown("학생의 질문을 수업 근거와 연결해 나만의 임상 모의실습을 설계합니다.")
     st.caption("예상 소요시간 10~15분 · 질문 분석 → 상황 선택 → 서술형 PBL 해결 → 피드백과 재도전")
@@ -246,16 +292,17 @@ with st.container(border=True):
             st.badge(label, color=color)
 
 
-st.header("1. 내가 궁금한 질문과 현재 생각", icon=":material/help_center:")
+st.header("1. 내가 궁금한 질문과 현재 생각", icon=":material/edit_note:")
 st.caption("질문의 어려운 단어보다 개념을 어떻게 연결하는지가 중요합니다. 두 질문은 필수이고 세 번째는 선택입니다.")
 
 if not discovery:
     unit = UNIT_CATALOG[unit_name]
     samples = list(unit.get("sample_questions", []))[:3]
-    with st.expander("질문을 만드는 데 도움이 필요하면 보기", icon=":material/lightbulb:"):
-        for sample in samples:
-            st.markdown(f"- {sample}")
-        st.caption("예시는 참고만 하고, 궁금한 점을 자신의 말로 바꾸어 적으세요.")
+    with st.container(key="ragpbl_question_help"):
+        with st.expander("질문을 만드는 데 도움이 필요하면 보기", icon=":material/lightbulb:"):
+            for sample in samples:
+                st.markdown(f"- {sample}")
+            st.caption("예시는 참고만 하고, 궁금한 점을 자신의 말로 바꾸어 적으세요.")
 
     with st.form("ragpbl_discovery_form", border=True):
         question_1 = st.text_input(
