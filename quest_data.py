@@ -1,7 +1,7 @@
 """HEALTH QUEST — 스마트 디지털 보건간호 PBL 학습지: 전 교과목(기초간호임상실무·간호의기초·보건간호·공중보건·인체구조와기능) 단원 및 기초·중급·심화 모의실습 데이터 모듈."""
 
 SITE_CONFIG = {
-    "site_title": "HEALTH QUEST — 예비 보건의료인의 미션룸",
+    "site_title": "HEALTH QUEST — 간호 미션룸",
     "subtitle": "특성화고등학교 보건간호 교육과정 · 자기주도 질문 및 기초·중급·심화 PBL 디지털 학습지",
     "target_audience": "특성화고등학교 간호학과(보건간호과)",
     "team_goal_title": "개인 자기주도 탐구와 모둠 협력을 통한 환자안전·근거기반 간호 역량 완성",
@@ -33,7 +33,7 @@ def _make_mission(
         "step_num": step_num,
         "level_label": level_label,  # "기초 모의실습" | "중급 모의실습" | "심화 모의실습"
         "question_type": f"{level_label} · PBL 문제해결",
-        "estimated_minutes": 4,
+        "estimated_minutes": 12,
         "title": title,
         "learning_objective": learning_objective,
         "situation": situation,

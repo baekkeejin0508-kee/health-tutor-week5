@@ -2,12 +2,22 @@
 import csv
 import io
 import json
-from datetime import datetime, timezone
+import re
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
 import streamlit as st
+from quest_ai import generate_grounded_feedback
 from quest_data import UNIT_CATALOG
 
 SUBMISSIONS_STORE_PATH = Path(__file__).resolve().parent / "submissions_store.json"
+KST = ZoneInfo("Asia/Seoul")
+
+
+def _now_kst() -> datetime:
+    return datetime.now(KST)
 
 BADGE_DEFINITIONS = {
     "question_explorer": {
@@ -48,7 +58,7 @@ def init_quest_state():
     first_unit_key = list(UNIT_CATALOG.keys())[0]
     first_scen_id = UNIT_CATALOG[first_unit_key]["scenarios"][0]["scenario_id"]
     defaults = {
-        "hq_site_title": "HEALTH QUEST — 예비 보건의료인의 미션룸",
+        "hq_site_title": "HEALTH QUEST — 간호 미션룸",
         "hq_nav_view": "STEP 01 · 단원 질문 & 피드백",
         "hq_selected_unit": first_unit_key,
         "hq_custom_unit_topic": "",
@@ -56,7 +66,7 @@ def init_quest_state():
         "hq_selected_scenario_id": first_scen_id,
         "hq_active_mission_idx": 0,  # 0: 기초, 1: 중급, 2: 심화
         "hq_reduce_motion": False,
-        "hq_sound_enabled": True,
+        "hq_sound_enabled": False,
         "hq_pending_sound": None,
         "hq_selected_term_idx": 0,
         # 1단계: 학생 질문 2~3개 및 AI 피드백, 모의실습 3단계 생성 여부
@@ -68,6 +78,7 @@ def init_quest_state():
         # 4단계: 팀별 협력 서술, AI 팀 피드백, 교사 최종 피드백
         "hq_student_label": "",
         "hq_group_label": "",
+        "hq_team_autofill_pending": False,
         "hq_team_notes": {
             "individual_summary": "",
             "peer_comparison": "",
@@ -194,7 +205,7 @@ def award_action_once(action_key: str, action_type: str, label: str, xp_gain: in
     st.session_state["hq_xp"] = st.session_state.get("hq_xp", 0) + xp_gain
     st.session_state["hq_growth_log"].append(
         {
-            "timestamp": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+            "timestamp": _now_kst().strftime("%H:%M:%S"),
             "action_type": action_type,
             "label": label,
             "xp_gain": xp_gain,
@@ -224,25 +235,16 @@ def _build_single_question_feedback(unit_data: dict, q_text: str, student_level:
     has_safety_concern = any(k in clean_q for k in safety_keywords)
 
     if matched_term:
-        explanation = f"**핵심 개념 풀이 ({matched_term})**: {matched_desc}"
+        explanation = f"핵심 개념 ({matched_term}): {matched_desc}"
     else:
         first_term, first_desc = list(unit_data.get("key_terms", {}).items())[0]
-        explanation = (
-            f"**단원 핵심 원리 연결**: 질문하신 내용은 **{unit_data.get('subject', '보건간호')}** 교과서의 "
-            f"환자 사정 및 안전 간호 원칙과 직결됩니다. 특히 **{first_term}**({first_desc})을 함께 기억하면 임상 판단이 훨씬 명확해집니다."
-        )
+        explanation = f"단원 핵심 개념 ({first_term}): {first_desc}"
 
     safety_note = ""
     if has_safety_concern:
-        safety_note = (
-            "\n- **[Safety Reviewer 안전 경계 안내]**: 침습적 처치(도뇨·주사·절개), 임의 약물 투여, 소독제 혼합은 "
-            "환자 안전과 법적 업무 범위에 위배되므로 절대 직접 시행하지 않고 **활력징후·증상 관찰 후 담당 간호사·의사에게 즉시 보고**해야 합니다."
-        )
+        safety_note = "\n- 안전 수칙: 침습적 처치·임의 투약·소독제 혼합은 금지되며, 활력징후 관찰 후 담당 간호사·의사에게 즉시 보고합니다."
 
-    return (
-        f"- {explanation}\n"
-        f"- **PBL 실습 연결 팁 ({student_level})**: 이 질문의 핵심 단서를 아래 **[기초 → 중급 → 심화 모의실습]** 상황에서 찾아 직접 적용해 보세요.{safety_note}"
-    )
+    return f"- {explanation}\n- 실습 적용 포인트: 아래 [기초 · 중급 · 심화 모의실습]에서 핵심 단서를 찾아 적용해 보세요.{safety_note}"
 
 
 def submit_student_questions_and_get_feedback(
@@ -257,10 +259,33 @@ def submit_student_questions_and_get_feedback(
     if not valid_qs:
         return []
 
+    fallback_sections = []
+    for idx, q_str in enumerate(valid_qs, start=1):
+        fallback_sections.append(f"Q{idx} 피드백\n{_build_single_question_feedback(unit_data, q_str, student_level)}")
+    ai_prompt = (
+        f"작업: 학생 질문 피드백\n교과목: {unit_data.get('subject', '')}\n"
+        f"실습 단원: {unit_name}\n학생이 선택한 난이도: {student_level}\n"
+        f"세부 주제: {custom_topic.strip() or '기본 단원'}\n"
+        + "\n".join(f"Q{idx}: {q}" for idx, q in enumerate(valid_qs, start=1))
+        + "\n각 질문에 대해 Q1 피드백, Q2 피드백 형식으로 개념 근거, 실습 적용, 다음 생각 질문을 짧게 작성하세요."
+    )
+    grounded = generate_grounded_feedback(
+        "student_questions",
+        ai_prompt,
+        "\n\n".join(fallback_sections),
+    )
+
+    feedback_parts = {}
+    matches = list(re.finditer(r"(?m)^Q(\d+)\s*피드백\s*[:：]?\s*", grounded.text))
+    for pos, match in enumerate(matches):
+        start = match.end()
+        end = matches[pos + 1].start() if pos + 1 < len(matches) else len(grounded.text)
+        feedback_parts[int(match.group(1))] = grounded.text[start:end].strip()
+
     other_unit_qs = [item for item in st.session_state.get("hq_unit_questions", []) if item.get("unit_name") != unit_name]
     new_entries = []
     for idx, q_str in enumerate(valid_qs, start=1):
-        fb_md = _build_single_question_feedback(unit_data, q_str, student_level)
+        fb_md = feedback_parts.get(idx) or _build_single_question_feedback(unit_data, q_str, student_level)
         entry = {
             "unit_name": unit_name,
             "q_num": idx,
@@ -268,6 +293,8 @@ def submit_student_questions_and_get_feedback(
             "level": student_level,
             "custom_topic": custom_topic.strip(),
             "feedback_markdown": fb_md,
+            "feedback_mode": grounded.mode,
+            "teacher_review_needed": grounded.teacher_review_needed,
         }
         new_entries.append(entry)
 
@@ -302,31 +329,36 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
     correct_opt_text = mission["options"][mission["correct_index"]]
 
     if is_correct and len(clean_rationale) >= 10:
-        kw_note = f"(포함된 핵심 개념: **{', '.join(matched_kw[:4])}**)" if matched_kw else "(자신의 언어로 임상 근거를 성실히 서술함)"
-        rationale_status = f"개인 PBL 서술 완료 {kw_note}"
+        kw_note = f"(핵심어: {', '.join(matched_kw[:4])})" if matched_kw else "(임상 근거 서술 완료)"
+        rationale_status = f"개인 서술 완료 {kw_note}"
         ai_feedback = (
-            f"**[AI 보건튜터 개인별 피드백 — {level_label}]**\n"
-            f"1. **임상 판단 및 단서 분석**: 정확한 판단입니다! 상황 속 핵심 단서({', '.join(mission['clinical_clues'][:2])})를 놓치지 않고 올바른 간호 행동을 선택했습니다.\n"
-            f"2. **자기주도 서술 피드백**: 학생이 작성한 *\"{clean_rationale}\"* 서술에서 환자안전과 근거 기반 간호(EBN)의 핵심 원리가 잘 드러납니다. {kw_note}\n"
-            f"3. **교과서 표준 해설**: {selected_exp}\n"
-            f"4. **다음 성장 제안**: 이 판단 근거를 잘 기억해 두었다가 다음 단계 실습 및 모둠원들과의 협력 토의에서 비교해 보세요."
+            f"AI 보건튜터 개인 피드백 · {level_label}\n"
+            f"- 판단 결과: 정답입니다. 핵심 단서({', '.join(mission['clinical_clues'][:2])})를 정확히 파악했습니다.\n"
+            f"- 서술 평가: 환자 안전과 근거 기반 간호 원칙이 잘 드러납니다. {kw_note}\n"
+            f"- 핵심 해설: {selected_exp}"
         )
     elif is_correct and len(clean_rationale) < 10:
-        rationale_status = "정답 확인 완료 · 개인 서술을 1문장 더 보충하면 피드백이 풍부해집니다"
+        rationale_status = "정답 확인 완료 · 근거 서술 보충 권장"
         ai_feedback = (
-            f"**[AI 보건튜터 개인별 피드백 — {level_label}]**\n"
-            f"1. **임상 판단 확인**: 올바른 선택지(**{selected_idx + 1}번**)를 골랐습니다! ({selected_exp})\n"
-            f"2. **자기주도 서술 코칭**: PBL 학습에서는 '왜 그렇게 판단했는지'를 자신의 말로 설명하는 과정이 가장 중요합니다. "
-            f"**[{mission.get('pbl_writing_guide', '관찰 단서와 판단 이유를 한 문장으로 적어보세요.')}]** 힌트를 참고해 서술란을 한 문장으로 채워 다시 눌러보세요!"
+            f"AI 보건튜터 개인 피드백 · {level_label}\n"
+            f"- 판단 결과: 정답은 {selected_idx + 1}번입니다. ({selected_exp})\n"
+            f"- 서술 코칭: 관찰 단서와 선택한 이유를 한 문장으로 더 적어보세요."
         )
     else:
-        rationale_status = "재도전 코칭 진행 중 (감점 없음)"
+        rationale_status = "재도전 코칭 (감점 없음)"
         ai_feedback = (
-            f"**[AI 보건튜터 개인별 코칭 — {level_label} (재도전 가이드)]**\n"
-            f"1. **선택한 행동 점검**: 방금 고르신 {selected_idx + 1}번 보기는 *{selected_exp}*\n"
-            f"2. **놓친 임상 단서 다시 보기**: {mission.get('missed_clue_guide', mission.get('hint', ''))}\n"
-            f"3. **서술 보완 가이드**: {mission.get('pbl_writing_guide', '')} 위 단서를 바탕으로 올바른 번호와 근거를 수정해 다시 제출해 보세요."
+            f"AI 보건튜터 재도전 가이드 · {level_label}\n"
+            f"- 선택 점검: {selected_idx + 1}번 보기는 {selected_exp}\n"
+            f"- 핵심 힌트: {mission.get('missed_clue_guide', mission.get('hint', ''))}"
         )
+
+    ai_prompt = (
+        f"작업: 개인 PBL 판단 근거 코칭\n미션: {mission['title']}\n수준: {level_label}\n"
+        f"상황: {mission.get('situation', '')}\n학생 선택: {mission['options'][selected_idx]}\n"
+        f"객관식 판정: {'정답' if is_correct else '재도전 필요'}\n학생 근거: {clean_rationale}\n"
+        f"확정 해설: {selected_exp}\n정답 판정은 바꾸지 말고, 학생 근거의 강점과 놓친 단서, 다음 수정 질문을 제시하세요."
+    )
+    grounded = generate_grounded_feedback("mission_rationale", ai_prompt, ai_feedback)
 
     result = {
         "mission_id": m_id,
@@ -338,8 +370,11 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
         "rationale": clean_rationale,
         "rationale_status": rationale_status,
         "matched_keywords": matched_kw,
-        "ai_individual_feedback": ai_feedback,
+        "ai_individual_feedback": grounded.text,
+        "feedback_mode": grounded.mode,
+        "teacher_review_needed": grounded.teacher_review_needed,
         "attempts": attempts,
+        "submitted_at": _now_kst().strftime("%Y-%m-%d %H:%M:%S"),
     }
     st.session_state["hq_submissions"][m_id] = result
     st.session_state["hq_pending_sound"] = "success" if is_correct else "try_again"
@@ -383,11 +418,21 @@ def submit_team_collaboration_and_get_feedback(
     scenario = get_current_scenario_data()
 
     ai_team_fb = (
-        f"**[AI 보건튜터 팀별 협력학습 피드백 — {group_name or '우리 모둠'}]**\n"
-        f"- **개인 추론과 모둠 비교의 연결성**: 개인별로 해결한 기초·중급·심화 실습 내용을 바탕으로, 모둠원 간 생각 차이(*\"{peer_comparison or '단서 비교 완료'}\"* )를 분석하여 사각지대를 줄인 점이 매우 우수합니다.\n"
-        f"- **팀 최종 해결안 및 우선순위 타당성**: 모둠이 도출한 최종 해결안(*\"{team_conclusion or '환자안전 최우선 간호 행동 합의'}\"* )은 **{unit.get('subject', '보건간호')}** 교육과정의 표준주의·환자안전·법적 업무 경계(비침습적 관찰 및 신속 보고) 원칙에 부합합니다.\n"
-        f"- **협업 성장 확인**: 토의를 통해 *\"{thought_change or '근거 기반 판단과 팀 소통의 중요성 확인'}\"* 으로 사고를 확장한 점이 예비 보건의료인의 다학제 협업 역량을 잘 보여줍니다."
+        f"AI 보건튜터 팀별 협력학습 피드백 — {group_name or '우리 모둠'}\n"
+        f"- 개인 추론과 모둠 비교: 기초·중급·심화 실습을 바탕으로 모둠원 간 생각 차이인 \"{peer_comparison or '단서 비교 완료'}\"를 비교하여 놓치기 쉬운 부분을 보완했습니다.\n"
+        f"- 팀 최종 해결안과 우선순위: \"{team_conclusion or '환자안전 최우선 간호 행동 합의'}\"는 {unit.get('subject', '보건간호')} 교육과정의 표준주의, 환자안전, 비침습적 관찰과 신속 보고 원칙에 부합합니다.\n"
+        f"- 협업 성장: 토의를 통해 \"{thought_change or '근거 기반 판단과 팀 소통의 중요성 확인'}\"으로 생각을 확장했습니다."
     )
+
+    ai_prompt = (
+        f"작업: 모둠 협력학습 피드백\n교과목: {unit.get('subject', '')}\n단원: {st.session_state.get('hq_selected_unit', '')}\n"
+        f"모의실습: {scenario.get('title', '')}\n개인 해결 요약: {individual_summary}\n"
+        f"팀원과 비교: {peer_comparison}\n팀 최종 해결안: {team_conclusion}\n"
+        f"토의 후 바뀐 생각: {thought_change}\n"
+        "개인 추론과 팀 비교의 연결성, 해결안의 안전성과 우선순위, 협업 성장을 자연스러운 문장으로 피드백하세요."
+    )
+    grounded = generate_grounded_feedback("team_collaboration", ai_prompt, ai_team_fb)
+    ai_team_fb = grounded.text
 
     existing_teacher_fb = st.session_state.get("hq_team_notes", {}).get("teacher_feedback", "")
     st.session_state["hq_student_label"] = student_name.strip()
@@ -398,8 +443,10 @@ def submit_team_collaboration_and_get_feedback(
         "team_conclusion": team_conclusion.strip(),
         "thought_change": thought_change.strip(),
         "ai_team_feedback": ai_team_fb,
+        "feedback_mode": grounded.mode,
+        "teacher_review_needed": grounded.teacher_review_needed,
         "teacher_feedback": existing_teacher_fb,
-        "saved_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M"),
+        "saved_at": _now_kst().strftime("%Y-%m-%d %H:%M"),
     }
     st.session_state["hq_pending_sound"] = "chime"
 
@@ -478,6 +525,84 @@ def load_submitted_reports() -> list[dict]:
     return records
 
 
+def _save_report_entry(report_entry: dict, identity_fields: tuple[str, ...]) -> dict:
+    all_reports = load_submitted_reports()
+    updated = False
+    for index, existing in enumerate(all_reports):
+        if all(existing.get(field) == report_entry.get(field) for field in identity_fields):
+            all_reports[index] = report_entry
+            updated = True
+            break
+    if not updated:
+        all_reports.append(report_entry)
+
+    st.session_state["hq_submitted_reports"] = all_reports
+    try:
+        SUBMISSIONS_STORE_PATH.write_text(
+            json.dumps(all_reports, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+    return report_entry
+
+
+def save_individual_progress_to_teacher() -> dict | None:
+    """현재 학생의 개인 질문·미션 서술을 개인 평가용 기록으로 저장하거나 갱신합니다."""
+    student_name = st.session_state.get("hq_student_label", "").strip()
+    if not student_name:
+        return None
+
+    unit_name = st.session_state.get("hq_selected_unit", "")
+    unit_data = get_current_unit_data()
+    scenario = get_current_scenario_data()
+    missions = scenario.get("missions", [])
+    subs = st.session_state.get("hq_submissions", {})
+    qs = get_unit_questions_for_current()
+    _, _, pct = get_scenario_progress(scenario)
+
+    mission_texts = []
+    for index in range(3):
+        if index < len(missions) and (sub := subs.get(missions[index]["id"])):
+            mission_texts.append(f"[{sub['selected_idx'] + 1}번 선택] {sub.get('rationale') or '(서술 없음)'}")
+        else:
+            mission_texts.append("(미제출)")
+
+    feedback_modes = sorted(
+        {
+            item.get("feedback_mode", "")
+            for item in [*qs, *subs.values()]
+            if item.get("feedback_mode")
+        }
+    )
+    review_needed = any(item.get("teacher_review_needed") for item in [*qs, *subs.values()])
+
+    report_entry = {
+        "report_id": f"individual_{student_name}_{unit_data.get('unit_id', 'u')}",
+        "record_type": "개인 기록",
+        "submitted_at": _now_kst().strftime("%Y-%m-%d %H:%M:%S"),
+        "student_name": student_name,
+        "group_name": "",
+        "subject": unit_data.get("subject", "보건간호"),
+        "unit_name": unit_name,
+        "progress_pct": int(pct * 100),
+        "xp": st.session_state.get("hq_xp", 0),
+        "questions_summary": " | ".join([f"Q{q['q_num']}: {q['question']}" for q in qs]) if qs else "(질문 미입력)",
+        "basic_mission": mission_texts[0],
+        "inter_mission": mission_texts[1],
+        "adv_mission": mission_texts[2],
+        "individual_summary": "",
+        "peer_comparison": "",
+        "team_conclusion": "",
+        "thought_change": "",
+        "ai_team_feedback": "",
+        "teacher_feedback": "",
+        "ai_feedback_mode": ", ".join(feedback_modes) or "규칙형 안전 모드",
+        "ai_teacher_review": "필요" if review_needed else "없음",
+    }
+    return _save_report_entry(report_entry, ("record_type", "student_name", "unit_name"))
+
+
 def submit_final_report_to_teacher() -> dict:
     """학생이 작성한 질문·기초/중급/심화 서술·팀 협력·피드백 전체를 교사용 제출함에 등록합니다."""
     unit_name = st.session_state.get("hq_selected_unit", "")
@@ -496,7 +621,7 @@ def submit_final_report_to_teacher() -> dict:
 
     student_name = st.session_state.get("hq_student_label", "").strip() or "이름미입력_학생"
     group_name = st.session_state.get("hq_group_label", "").strip() or "기본모둠"
-    now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    now_str = _now_kst().strftime("%Y-%m-%d %H:%M:%S")
 
     q_summary = " | ".join([f"Q{q['q_num']}: {q['question']}" for q in qs]) if qs else "(질문 미입력)"
 
@@ -513,7 +638,8 @@ def submit_final_report_to_teacher() -> dict:
             m_texts.append("-")
 
     report_entry = {
-        "report_id": f"{student_name}_{unit_data.get('unit_id', 'u')}_{datetime.now().strftime('%H%M%S')}",
+        "report_id": f"team_{group_name}_{unit_data.get('unit_id', 'u')}",
+        "record_type": "모둠 기록",
         "submitted_at": now_str,
         "student_name": student_name,
         "group_name": group_name,
@@ -531,30 +657,12 @@ def submit_final_report_to_teacher() -> dict:
         "thought_change": notes.get("thought_change", ""),
         "ai_team_feedback": notes.get("ai_team_feedback", ""),
         "teacher_feedback": notes.get("teacher_feedback", ""),
+        "ai_feedback_mode": notes.get("feedback_mode", "규칙형 안전 모드"),
+        "ai_teacher_review": "필요" if notes.get("teacher_review_needed") else "없음",
     }
 
-    all_reports = load_submitted_reports()
-    # 동일 학생·동일 단원이면 최신본으로 업데이트하거나 추가
-    updated = False
-    for i, r in enumerate(all_reports):
-        if r.get("student_name") == student_name and r.get("unit_name") == unit_name:
-            all_reports[i] = report_entry
-            updated = True
-            break
-    if not updated:
-        all_reports.append(report_entry)
-
-    st.session_state["hq_submitted_reports"] = all_reports
-    try:
-        SUBMISSIONS_STORE_PATH.write_text(
-            json.dumps(all_reports, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
-
     st.session_state["hq_pending_sound"] = "fanfare"
-    return report_entry
+    return _save_report_entry(report_entry, ("record_type", "group_name", "unit_name"))
 
 
 def export_submitted_reports_csv() -> bytes:
@@ -604,3 +712,74 @@ def export_submitted_reports_csv() -> bytes:
             ]
         )
     return output.getvalue().encode("utf-8-sig")
+
+
+REPORT_COLUMNS = [
+    ("기록유형", "record_type"),
+    ("제출일시", "submitted_at"),
+    ("학번/이름", "student_name"),
+    ("모둠명", "group_name"),
+    ("교과목", "subject"),
+    ("학습단원", "unit_name"),
+    ("진도율(%)", "progress_pct"),
+    ("성장 코인", "xp"),
+    ("학생 질문(2~3개)", "questions_summary"),
+    ("기초 모의실습(개인서술)", "basic_mission"),
+    ("중급 모의실습(개인서술)", "inter_mission"),
+    ("심화 모의실습(개인서술)", "adv_mission"),
+    ("팀원 의견 비교", "peer_comparison"),
+    ("팀 최종 해결안", "team_conclusion"),
+    ("토의 후 성찰", "thought_change"),
+    ("AI 팀 피드백", "ai_team_feedback"),
+    ("AI 피드백 방식", "ai_feedback_mode"),
+    ("AI 교사 검토", "ai_teacher_review"),
+    ("교사 최종 피드백", "teacher_feedback"),
+]
+
+
+def _reports_to_xlsx(records: list[dict], sheet_title: str) -> bytes:
+    """학생 제출용 또는 교사용 통합 보고서를 실제 .xlsx 파일로 생성합니다."""
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = sheet_title[:31]
+    sheet.freeze_panes = "A2"
+    sheet.append([title for title, _ in REPORT_COLUMNS])
+
+    header_fill = PatternFill("solid", fgColor="DDEBE6")
+    header_font = Font(bold=True, color="274B40")
+    for cell in sheet[1]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for report in records:
+        sheet.append([report.get(field, "") for _, field in REPORT_COLUMNS])
+
+    for row in sheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+    widths = [14, 19, 24, 18, 18, 34, 12, 12, 45, 45, 45, 45, 36, 45, 36, 48, 48]
+    for index, width in enumerate(widths, start=1):
+        sheet.column_dimensions[chr(64 + index)].width = width
+    sheet.auto_filter.ref = sheet.dimensions
+
+    output = io.BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def export_submitted_reports_xlsx() -> bytes:
+    """교사가 모든 학생의 제출물을 통합 Excel 파일로 내려받습니다."""
+    return _reports_to_xlsx(load_submitted_reports(), "학생 제출 통합")
+
+
+def export_current_student_report_xlsx() -> bytes:
+    """현재 학생이 자신의 최신 제출물만 Excel 파일로 내려받습니다."""
+    student_name = st.session_state.get("hq_student_label", "").strip() or "이름미입력_학생"
+    unit_name = st.session_state.get("hq_selected_unit", "")
+    matches = [
+        report for report in load_submitted_reports()
+        if report.get("student_name") == student_name and report.get("unit_name") == unit_name
+    ]
+    return _reports_to_xlsx(matches[-1:] if matches else [], "나의 학습 기록")
