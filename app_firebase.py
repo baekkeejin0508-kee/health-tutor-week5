@@ -5,7 +5,9 @@ Deploy this file as a separate Streamlit Community Cloud app and configure
 ``app_integrated.py`` deployment can therefore remain independent.
 """
 
-# Importing the integrated entrypoint runs the Streamlit application.  Keeping
-# this tiny wrapper gives Community Cloud a distinct GitHub coordinate
-# (repository + branch + entrypoint) for the Firebase deployment.
-import app_integrated  # noqa: F401,E402
+from integrated_app_runtime import run_integrated_app
+
+
+# This distinct entrypoint gives Community Cloud a separate deployment while
+# both integrated apps reuse exactly the same tested runtime.
+run_integrated_app()

@@ -31,6 +31,13 @@ def _button_count(at: AppTest, key: str) -> int:
 
 
 class IntegratedAppTest(unittest.TestCase):
+    def test_firebase_entrypoint_renders_integrated_app(self):
+        at = AppTest.from_file("app_firebase.py", default_timeout=30).run()
+
+        self.assertFalse(at.exception)
+        self.assertGreater(len(at.main), 0)
+        self.assertIn("hq_integrated_mode", at.session_state)
+
     def test_simulation_lab_unlocks_only_after_all_missions(self):
         at = AppTest.from_file("app_integrated.py", default_timeout=30).run()
         self.assertFalse(at.exception)
