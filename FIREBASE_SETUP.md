@@ -21,7 +21,7 @@ OAuth 클라이언트 ID와 Secret은 `[auth.google]`에 입력합니다.
 ## 실행
 
 ```powershell
-python -m streamlit run app_integrated.py --server.port 8503
+python -m streamlit run app_firebase.py --server.port 8503
 ```
 
 ## 규칙 배포 전 검사
