@@ -81,6 +81,15 @@ def _unit_display_name(unit_name: str) -> str:
 # 사이드바 (간결하고 산뜻한 구성을 적용)
 # ---------------------------------------------------------
 with st.sidebar:
+    firebase_identity = st.session_state.get("hq_identity")
+    if firebase_identity:
+        st.caption(
+            f"로그인: {firebase_identity.get('name', '')} · "
+            f"{'교사' if firebase_identity.get('role') == 'teacher' else firebase_identity.get('class_id', '학생')}"
+        )
+        if st.button("로그아웃", key="firebase_logout", use_container_width=True):
+            st.logout()
+
     _md_html(
         f"""
         <div class="hq-sidebar-brand notranslate" translate="no">
@@ -165,18 +174,21 @@ with st.sidebar:
     else:
         st.caption("AI 피드백: 규칙형 안전 모드 · 서버 AI 설정 확인 필요")
 
-    with st.expander("선생님용 제출 관리"):
-        reps = load_submitted_reports()
-        st.caption(f"현재 이 앱에 제출된 기록: {len(reps)}건")
-        st.download_button(
-            label=f"전체 제출물 Excel 받기 ({len(reps)}건)",
-            data=export_submitted_reports_xlsx(),
-            file_name="HEALTH_QUEST_학생제출보고서_전체목록.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            key="sidebar_teacher_excel_dl",
-        )
-        st.caption("현재는 선생님 인증이 없는 시연 기능입니다. 실제 수업 배포 전에는 교사 로그인과 Firebase 저장소 연결이 필요합니다.")
+    if not st.session_state.get("hq_integrated_mode", False):
+        with st.expander("선생님용 제출 관리"):
+            reps = load_submitted_reports()
+            st.caption(f"현재 이 앱에 제출된 기록: {len(reps)}건")
+            st.download_button(
+                label=f"전체 제출물 Excel 받기 ({len(reps)}건)",
+                data=export_submitted_reports_xlsx(),
+                file_name="HEALTH_QUEST_학생제출보고서_전체목록.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="sidebar_teacher_excel_dl",
+            )
+            st.caption("현재는 선생님 인증이 없는 시연 기능입니다. 실제 수업 배포 전에는 교사 로그인과 Firebase 저장소 연결이 필요합니다.")
+    elif firebase_identity and firebase_identity.get("role") == "teacher":
+        st.success("교사 인증됨 · 상단의 교사 대시보드에서 제출물을 확인하세요.")
 
 # ---------------------------------------------------------
 # 상단 히어로 배너 (세련되고 간결한 구성)

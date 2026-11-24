@@ -1,6 +1,9 @@
 # Streamlit secrets & Environment variables (API Key 보호)
 .streamlit/secrets.toml
 .env
+*firebase-adminsdk*.json
+*firebase-service-account*.json
+*service-account-key*.json
 
 # Python Cache & Database
 __pycache__/

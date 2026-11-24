@@ -1,0 +1,12 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // HEALTH QUEST currently uses only the trusted Streamlit Python server.
+    // Admin SDK calls are protected by IAM plus application role/owner guards.
+    // Direct browser/mobile access stays closed by default.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

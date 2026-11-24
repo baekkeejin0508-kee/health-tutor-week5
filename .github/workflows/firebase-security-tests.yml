@@ -1,0 +1,32 @@
+name: Firebase security and integration tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Compile Firebase and Streamlit entry points
+        run: >-
+          python -m py_compile
+          firebase_integration.py
+          student_submission.py
+          teacher_dashboard.py
+          app_integrated.py
+          app.py
+      - name: Run authorization, rules, and integrated-flow tests
+        run: python -m unittest test_firebase_security.py test_app_integrated.py

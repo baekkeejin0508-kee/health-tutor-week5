@@ -5,6 +5,11 @@ HEALTH QUEST — 간호 미션룸과 RAG 모의상황실습을 연결한 통합 
 
 import streamlit as st
 
+from firebase_integration import (
+    load_firebase_settings,
+    persist_current_learning_state,
+    require_authenticated_identity,
+)
 from quest_engine import get_current_scenario_data, get_scenario_progress, init_quest_state
 
 
@@ -13,6 +18,9 @@ st.set_page_config(
     page_icon=":material/clinical_notes:",
     layout="wide",
 )
+
+firebase_settings = load_firebase_settings()
+identity = require_authenticated_identity(firebase_settings)
 
 st.session_state["hq_integrated_mode"] = True
 init_quest_state()
@@ -30,6 +38,24 @@ pages = [
     )
 ]
 
+if firebase_settings.enabled and identity is not None and identity.role == "student":
+    pages.append(
+        st.Page(
+            "student_submission.py",
+            title="수행평가 제출",
+            icon=":material/upload_file:",
+        )
+    )
+
+if firebase_settings.enabled and identity is not None and identity.role == "teacher":
+    pages.append(
+        st.Page(
+            "teacher_dashboard.py",
+            title="교사 대시보드",
+            icon=":material/dashboard:",
+        )
+    )
+
 if simulation_unlocked:
     pages.append(
         st.Page(
@@ -41,3 +67,4 @@ if simulation_unlocked:
 
 navigation = st.navigation(pages, position="top")
 navigation.run()
+persist_current_learning_state(firebase_settings, identity)
