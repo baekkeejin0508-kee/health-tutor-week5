@@ -31,3 +31,9 @@ python -m unittest test_firebase_security.py test_app_integrated.py
 ```
 
 Firebase CLI를 설치한 환경에서는 프로젝트 `health-quest-agent`에 `firestore.rules`와 `storage.rules`를 배포합니다. 규칙은 직접 클라이언트 접근을 전부 차단하므로, 실제 데이터 작업은 인증된 Streamlit 서버를 통해서만 수행됩니다.
+
+Firebase CLI가 없는 환경에서는 서비스 계정 파일의 경로를 런타임 인수로만 전달하여 다음 스크립트로 동일한 규칙을 배포할 수 있습니다. 서비스 계정 파일은 저장소에 복사하거나 커밋하지 않습니다.
+
+```powershell
+python scripts/deploy_firebase_rules.py "C:\path\to\service-account.json"
+```
