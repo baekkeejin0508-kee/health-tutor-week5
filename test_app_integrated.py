@@ -205,7 +205,7 @@ class IntegratedAppTest(unittest.TestCase):
             self.assertFalse(at.exception)
             self.assertTrue(any(item.value == "수행평가 자료 제출" for item in at.title))
 
-    def test_access_code_landing_claim_and_google_rollback(self):
+    def test_public_access_code_app_keeps_student_login_mode(self):
         code = generate_access_code()
         student_uid = "a" * 32
         credential = {
@@ -246,8 +246,8 @@ class IntegratedAppTest(unittest.TestCase):
             at.secrets["authz"] = {"student_login_mode": "google"}
             at.run()
             self.assertFalse(at.exception)
-            self.assertTrue(any(button.label == "Google 계정으로 학생 로그인" for button in at.button))
-            self.assertNotIn("hq_identity", at.session_state)
+            self.assertFalse(any(button.label == "Google 계정으로 학생 로그인" for button in at.button))
+            self.assertEqual(at.session_state["hq_identity"]["uid"], student_uid)
 
     def test_final_team_form_requires_audio(self):
         unit_name, unit = next(iter(UNIT_CATALOG.items()))

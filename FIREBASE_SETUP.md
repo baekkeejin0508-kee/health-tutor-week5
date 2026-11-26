@@ -39,9 +39,11 @@ python -m streamlit run app_firebase_google.py --server.address localhost --serv
 
 학생들이 꽃 별명을 등록하면 교사 대시보드의 ‘모둠 편성 관리’에서 학급과 모둠 이름을 고르고 같은 반 학생 2~6명을 선택해 저장합니다. 학생의 수행평가 제출과 모의상황실습 화면에 모둠 이름과 명단이 표시됩니다. 모둠 대표 한 명이 최종 답안과 녹음을 제출하면 제출 당시 모둠원이 각자의 제출 기록에서 결과를 확인할 수 있습니다. ‘수행평가 제출’ 화면의 ‘제출 테스트용 Excel 받기’로 개인 첨부 제출을 먼저 시험할 수 있습니다.
 
-Google 버전에서는 코드 발급 없이 학생이 Google 로그인 후 학급·학번·이름을 등록합니다. 나머지 수업과 평가 기능은 접속코드 버전과 같습니다. 편성된 모둠은 로그인 방식별로 따로 저장됩니다. 기존 환경변수 전환은 공용 진입점 `app_firebase.py`에서 계속 사용할 수 있습니다.
+Google 버전에서는 코드 발급 없이 학생이 Google 로그인 후 학급·학번·이름을 등록합니다. 나머지 수업과 평가 기능은 접속코드 버전과 같습니다. 편성된 모둠은 로그인 방식별로 따로 저장됩니다.
 
 ## Streamlit Community Cloud Secrets
+
+기존 `health-quest-firebase-2026.streamlit.app` 배포의 진입점인 `app_firebase.py`는 학생 개별 접속코드와 교사 Google 로그인을 사용합니다. 이 주소를 계속 쓸 때는 현재 공개 OAuth 콜백을 유지합니다.
 
 두 앱을 새로 배포할 때는 같은 저장소의 `deploy/health-quest-login` 브랜치를 선택하고 아래 실행 파일을 지정합니다. 하위 도메인은 예시이며, 실제로 확보한 주소를 콜백에도 동일하게 사용합니다.
 
@@ -54,7 +56,7 @@ Google 버전에서는 코드 발급 없이 학생이 Google 로그인 후 학�
 
 - `[firebase]`의 활성화 설정, 프로젝트와 버킷, `[firebase.service_account]`를 확인합니다.
 - 각 새 앱에서 `[auth]`의 `redirect_uri`를 `https://<앱의 실제 하위 도메인>.streamlit.app/oauth2callback`으로 설정하고, 앱마다 별도의 `cookie_secret`을 사용합니다. 같은 Google OAuth 클라이언트의 승인된 리디렉션 URI에 두 새 콜백을 추가합니다. 기존 앱에 등록된 콜백과 로컬 테스트용 콜백도 유지합니다.
-- `[auth.google]`과 `[authz]`의 교사 허용 목록을 확인합니다. 새로 분리 배포할 때 Google 버전의 실행 파일은 `app_firebase_google.py`, 개별코드 버전의 실행 파일은 `app_firebase_codes.py`입니다. 앱마다 자체 공개 URL을 넣은 콜백을 설정합니다. 기존 `app_firebase.py`를 유지하는 배포에서는 `[authz]`의 `student_login_mode = "google"` 또는 `"access_code"`로 선택할 수 있습니다.
+- `[auth.google]`과 `[authz]`의 교사 허용 목록을 확인합니다. `app_firebase_google.py`와 `app_firebase_codes.py`는 각 실행 파일에서 학생 로그인 방식이 정해집니다.
 
 ## 규칙 배포 전 검사
 
