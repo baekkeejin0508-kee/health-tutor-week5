@@ -14,6 +14,13 @@ from openpyxl import Workbook
 from openpyxl.styles import Alignment, Font, PatternFill
 
 from quest_data import UNIT_CATALOG
+from firebase_integration import (
+    SIMULATION_ANSWER_KEYS,
+    current_identity,
+    get_backend,
+    persist_learning_now,
+)
+from quest_engine import get_current_scenario_data, simulation_ready
 from rag_pbl_single_agent import (
     DiscoveryResult,
     PBLReview,
@@ -30,6 +37,17 @@ st.set_page_config(
     page_icon=":material/clinical_notes:",
     layout="wide",
 )
+
+firebase_mode = bool(st.session_state.get("hq_firebase_mode"))
+identity = current_identity() if firebase_mode else None
+if firebase_mode and (identity is None or identity.role != "student"):
+    st.error("학생 계정으로 로그인한 뒤 모의상황실습을 진행하세요.")
+    st.stop()
+if firebase_mode and not simulation_ready(get_current_scenario_data()):
+    st.warning("기초 → 중급 → 심화 순서로 통과하면 모의상황실습이 열립니다.")
+    if st.button("간호 미션룸으로 돌아가기"):
+        st.switch_page("app.py")
+    st.stop()
 
 st.html(
     """
@@ -91,10 +109,12 @@ STATE_DEFAULTS = {
     "ragpbl_review": None,
     "ragpbl_attempts": 0,
     "ragpbl_source_mode": "",
+    "ragpbl_review_source_mode": "",
     "ragpbl_last_unit": "",
     "ragpbl_questions": [],
     "ragpbl_prior_knowledge": "",
     "ragpbl_last_error": "",
+    "ragpbl_saved_answer": {},
 }
 for state_key, default in STATE_DEFAULTS.items():
     st.session_state.setdefault(state_key, default)
@@ -106,9 +126,18 @@ def unit_display_name(unit_name: str) -> str:
     return unit_name
 
 
+def show_final_receipt(receipt: str) -> None:
+    st.success(f"모의상황실습 최종 제출이 등록돼 있습니다. 제출번호 {receipt[:8]}")
+    if st.button("내 모둠 제출 확인 및 교사 평가 보기", type="primary"):
+        st.session_state["hq_receipt_focus"] = receipt
+        st.switch_page("student_submission.py")
+
+
 def reset_learning() -> None:
     for state_key, default in STATE_DEFAULTS.items():
         st.session_state[state_key] = default
+    for state_key in SIMULATION_ANSWER_KEYS:
+        st.session_state.pop(state_key, None)
 
 
 def fallback_discovery(unit_name: str, questions: list[str], prior_knowledge: str) -> DiscoveryResult:
@@ -202,13 +231,15 @@ def build_excel_report(
     discovery: DiscoveryResult,
     scenario: ScenarioCandidate,
     review: PBLReview,
+    *,
+    alias_only: bool = False,
 ) -> bytes:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "RAG PBL 학습기록"
     rows = [
-        ("학습자 코드", learner_code or "미입력"),
-        ("모둠", group_name or "미입력"),
+        ("개인 별명" if alias_only else "학습자 코드", learner_code or "미입력"),
+        ("모둠 별명" if alias_only else "모둠", group_name or ("미편성" if alias_only else "미입력")),
         ("교과", subject),
         ("단원", unit_display_name(unit_name)),
         ("지식수준", f"{discovery.knowledge_level} — {discovery.level_reason}"),
@@ -229,6 +260,8 @@ def build_excel_report(
     sheet.append(["HEALTH QUEST — RAG PBL 실습 기록", ""])
     for label, value in rows:
         sheet.append([label, value])
+        if sheet.cell(sheet.max_row, 2).data_type == "f":
+            sheet.cell(sheet.max_row, 2).data_type = "s"
     sheet["A1"].font = Font(bold=True, size=15, color="17324D")
     sheet["A1"].fill = PatternFill("solid", fgColor="DCECE5")
     sheet["B1"].fill = PatternFill("solid", fgColor="DCECE5")
@@ -251,9 +284,14 @@ with st.sidebar:
     st.header("RAG PBL 실습실", icon=":material/clinical_notes:")
     st.caption("질문에서 시작하는 단일 AI 보건튜터")
 
-    subject = st.selectbox("교과목", subjects, key="ragpbl_subject")
-    units = [name for name, value in UNIT_CATALOG.items() if value.get("subject") == subject]
-    unit_name = st.selectbox("실습 단원", units, format_func=unit_display_name, key="ragpbl_unit")
+    if firebase_mode:
+        unit_name = st.session_state["hq_selected_unit"]
+        subject = UNIT_CATALOG[unit_name].get("subject", "보건간호")
+        st.write(unit_display_name(unit_name))
+    else:
+        subject = st.selectbox("교과목", subjects, key="ragpbl_subject")
+        units = [name for name, value in UNIT_CATALOG.items() if value.get("subject") == subject]
+        unit_name = st.selectbox("실습 단원", units, format_func=unit_display_name, key="ragpbl_unit")
 
     if st.session_state.ragpbl_last_unit and st.session_state.ragpbl_last_unit != unit_name:
         reset_learning()
@@ -267,12 +305,14 @@ with st.sidebar:
 
     if st.button("새 학습 시작", icon=":material/restart_alt:", width="stretch"):
         reset_learning()
+        st.session_state.ragpbl_last_unit = unit_name
+        persist_learning_now()
         st.rerun()
 
-    st.info(
-        "현재 앱은 세션 안에서만 기록됩니다. 완료 후 Excel을 내려받아 선생님이 안내한 제출처에 올리세요.",
-        icon=":material/info:",
-    )
+    if firebase_mode:
+        st.info("개인 답안과 AI 피드백을 확인한 뒤 모둠이 한 기기에서 함께 녹음해 제출하세요.")
+    else:
+        st.info("완료 후 Excel을 내려받아 선생님이 안내한 제출처에 올리세요.")
     st.caption("실제 환자 정보, 학생의 건강정보, 전화번호·이메일·주민등록번호는 입력하지 마세요.")
 
 
@@ -355,24 +395,27 @@ if not discovery:
             else:
                 st.session_state.ragpbl_questions = questions
                 st.session_state.ragpbl_prior_knowledge = prior_knowledge.strip()
-                with st.spinner("교과서와 공공 보건의료 자료를 검색해 질문과 지식수준을 분석하고 있습니다..."):
-                    try:
-                        if not status["configured"]:
-                            raise RuntimeError("RAG not configured")
-                        result = generate_scenarios(
-                            subject=subject,
-                            unit=unit_display_name(unit_name),
-                            questions=questions,
-                            prior_knowledge=prior_knowledge.strip(),
-                        )
-                        source_mode = "교과서·공공자료 RAG"
-                        st.session_state.ragpbl_last_error = ""
-                    except Exception as exc:
+                with st.spinner("질문과 현재 학습 내용을 분석하고 있습니다..."):
+                    result = None
+                    st.session_state.ragpbl_last_error = ""
+                    if status["configured"]:
+                        try:
+                            result = generate_scenarios(
+                                subject=subject,
+                                unit=unit_display_name(unit_name),
+                                questions=questions,
+                                prior_knowledge=prior_knowledge.strip(),
+                            )
+                        except Exception as exc:
+                            st.session_state.ragpbl_last_error = type(exc).__name__
+                    if result is None:
                         result = fallback_discovery(unit_name, questions, prior_knowledge.strip())
                         source_mode = "현재 단원 데이터 시연"
-                        st.session_state.ragpbl_last_error = type(exc).__name__
+                    else:
+                        source_mode = "교과서·공공자료 RAG"
                 st.session_state.ragpbl_discovery = result
                 st.session_state.ragpbl_source_mode = source_mode
+                persist_learning_now()
                 st.rerun()
 else:
     with st.container(border=True):
@@ -381,7 +424,7 @@ else:
         st.caption("이 표시는 질문 수가 아니라 개념 연결과 근거 표현을 바탕으로 한 학습 출발점이며, 성적 판정이 아닙니다.")
         st.markdown("핵심 개념: " + " · ".join(discovery.key_concepts))
         st.caption(f"생성 방식: {st.session_state.ragpbl_source_mode}")
-        if st.session_state.ragpbl_last_error:
+        if status["configured"] and st.session_state.ragpbl_last_error:
             st.warning(
                 "RAG 호출을 완료하지 못해 단원 데이터 시연 결과를 표시했습니다. 서버의 API 키·Vector Store·사용량 설정을 확인하세요.",
                 icon=":material/cloud_off:",
@@ -411,13 +454,20 @@ if discovery:
                 icon=":material/check_circle:" if selected else ":material/arrow_forward:",
                 width="stretch",
             ):
-                st.session_state.ragpbl_selected_id = item.id
-                st.session_state.ragpbl_review = None
-                st.rerun()
+                if not selected:
+                    st.session_state.ragpbl_selected_id = item.id
+                    st.session_state.ragpbl_review = None
+                    st.session_state.ragpbl_saved_answer = {}
+                    for key in SIMULATION_ANSWER_KEYS:
+                        st.session_state.pop(key, None)
+                    persist_learning_now()
+                    st.rerun()
 
 
 scenario = selected_scenario()
 if scenario:
+    for key, value in st.session_state.ragpbl_saved_answer.items():
+        st.session_state.setdefault(key, value)
     st.header("3. 선택한 상황의 PBL 해결안 작성", icon=":material/edit_note:")
     with st.container(border=True):
         st.badge(f"선택 상황 {scenario.id}", color="green")
@@ -471,13 +521,7 @@ if scenario:
         )
 
     if submit_answer:
-        answer_parts = [
-            st.session_state.get("ragpbl_problem", ""),
-            st.session_state.get("ragpbl_hypothesis", ""),
-            st.session_state.get("ragpbl_action_plan", ""),
-            st.session_state.get("ragpbl_evidence", ""),
-            st.session_state.get("ragpbl_evaluation", ""),
-        ]
+        answer_parts = [st.session_state.get(key, "") for key in SIMULATION_ANSWER_KEYS]
         short_sections = [index + 1 for index, value in enumerate(answer_parts) if len(value.strip()) < 20]
         guard = guard_student_text(" ".join(answer_parts))
         if short_sections:
@@ -485,34 +529,42 @@ if scenario:
         elif not guard.safe:
             st.error(guard.message)
         else:
-            with st.spinner("수업 자료를 다시 검색해 답안의 개념·추론·근거·성찰을 확인하고 있습니다..."):
-                try:
-                    if not status["configured"]:
-                        raise RuntimeError("RAG not configured")
-                    result = review_pbl_answer(
-                        subject=subject,
-                        unit=unit_display_name(unit_name),
-                        discovery=discovery,
-                        scenario=scenario,
-                        problem_definition=answer_parts[0],
-                        hypothesis=answer_parts[1],
-                        action_plan=answer_parts[2],
-                        evidence=answer_parts[3],
-                        evaluation=answer_parts[4],
-                    )
-                    st.session_state.ragpbl_last_error = ""
-                except Exception as exc:
-                    result = fallback_review(answer_parts)
-                    st.session_state.ragpbl_last_error = type(exc).__name__
+            result = None
+            if status["configured"]:
+                with st.spinner("수업 자료를 다시 검색해 답안의 개념·추론·근거·성찰을 확인하고 있습니다..."):
+                    try:
+                        result = review_pbl_answer(
+                            subject=subject,
+                            unit=unit_display_name(unit_name),
+                            discovery=discovery,
+                            scenario=scenario,
+                            problem_definition=answer_parts[0],
+                            hypothesis=answer_parts[1],
+                            action_plan=answer_parts[2],
+                            evidence=answer_parts[3],
+                            evaluation=answer_parts[4],
+                        )
+                    except Exception:
+                        result = None
+            review_source = "교과서·공공자료 RAG" if result is not None else "현재 단원 데이터 시연"
+            if result is None:
+                if status["configured"]:
+                    review_source = "RAG 연결 실패 · 현재 단원 데이터 시연"
+                result = fallback_review(answer_parts)
             st.session_state.ragpbl_review = result
+            st.session_state.ragpbl_review_source_mode = review_source
+            st.session_state.ragpbl_saved_answer = dict(zip(SIMULATION_ANSWER_KEYS, answer_parts))
             st.session_state.ragpbl_attempts += 1
+            persist_learning_now()
             st.rerun()
 
 
 review = st.session_state.ragpbl_review
 scenario = selected_scenario()
 if review and scenario and discovery:
-    st.header("4. RAG 근거 피드백과 성장 기록", icon=":material/trending_up:")
+    st.header("4. 답안 피드백과 성장 기록", icon=":material/trending_up:")
+    if st.session_state.ragpbl_review_source_mode:
+        st.caption(f"피드백 방식: {st.session_state.ragpbl_review_source_mode}")
     score_columns = st.columns(4)
     score_data = (
         ("개념 적용", review.concept_score),
@@ -541,26 +593,37 @@ if review and scenario and discovery:
     if review.teacher_review_needed:
         st.warning(review.teacher_review_reason, title="교사 확인 필요", icon=":material/supervisor_account:")
 
-    learner_columns = st.columns(2)
-    with learner_columns[0]:
-        learner_code = st.text_input(
-            "학습자 코드 — 교사가 부여한 번호",
-            key="ragpbl_learner_code",
-            placeholder="예: 2-1-07",
-            max_chars=30,
+    assigned_team = None
+    team_lookup_failed = False
+    if identity:
+        try:
+            backend = get_backend()
+            assigned_team = backend.get_student_team(identity)
+        except Exception:
+            team_lookup_failed = True
+
+    if identity:
+        learner_code = identity.name if identity.uses_access_code else identity.student_number
+        group_name = "확인 불가" if team_lookup_failed else ""
+        if assigned_team:
+            group_name = assigned_team["name"]
+    else:
+        learner_columns = st.columns(2)
+        learner_code = learner_columns[0].text_input(
+            "학습자 코드 — 교사가 부여한 번호", key="ragpbl_learner_code",
+            placeholder="예: 2-1-07", max_chars=30,
         )
-    with learner_columns[1]:
-        group_name = st.text_input(
-            "모둠 이름 — 선택",
-            key="ragpbl_group_name",
-            placeholder="예: 나이팅게일 1모둠",
-            max_chars=40,
+        group_name = learner_columns[1].text_input(
+            "모둠 이름 — 선택", key="ragpbl_group_name",
+            placeholder="예: 나이팅게일 1모둠", max_chars=40,
         )
-    st.caption("학습자 코드와 모둠 이름은 Excel 파일에만 포함되며 AI 분석에는 전송하지 않습니다.")
+    if not firebase_mode:
+        st.caption("학습자 코드와 모둠 이름은 Excel 파일에만 포함되며 AI 분석에는 전송하지 않습니다.")
 
     with st.container(horizontal=True):
         if st.button("피드백 반영해 다시 작성", icon=":material/edit:", width="stretch"):
             st.session_state.ragpbl_review = None
+            persist_learning_now()
             st.rerun()
         report_bytes = build_excel_report(
             learner_code,
@@ -570,6 +633,7 @@ if review and scenario and discovery:
             discovery,
             scenario,
             review,
+            alias_only=bool(identity and identity.uses_access_code),
         )
         st.download_button(
             "내 RAG PBL 학습기록 Excel 받기",
@@ -580,4 +644,68 @@ if review and scenario and discovery:
             type="primary",
             width="stretch",
         )
-    st.caption(f"피드백 받은 횟수: {st.session_state.ragpbl_attempts}회 · 다운로드 파일은 선생님이 안내한 제출처에 직접 제출합니다.")
+    st.caption(f"피드백 받은 횟수: {st.session_state.ragpbl_attempts}회")
+
+    if identity:
+        st.header("5. 모둠 답안과 음성 보고 제출")
+        st.success("개인 모의상황실습 답안을 완료했습니다.")
+        st.caption("개인 모의상황실습을 마친 모둠원 중 한 명이 공동 답안과 음성을 제출하세요. 제출 후에는 모든 모둠원이 ‘수행평가 제출’에서 확인할 수 있습니다.")
+        receipt_key = "hq_final_submission_id"
+        if receipt := st.session_state.get(receipt_key):
+            show_final_receipt(receipt)
+            st.stop()
+        st.warning("모둠에서 합의한 최종 답안을 함께 말로 설명하고 녹음하세요. 음성을 첨부해야 최종 제출할 수 있습니다.",
+                   title="모둠 음성 보고 필수", icon=":material/mic:")
+        if identity.uses_access_code:
+            st.caption("녹음과 답안에는 팀원의 실명·학번 대신 꽃 별명을 사용하세요.")
+        if team_lookup_failed:
+            st.error("모둠 편성을 가져오지 못했습니다. 새로고침 후 다시 시도해 주세요.")
+            st.stop()
+        if assigned_team is None:
+            st.info("선생님이 모둠을 편성하면 모둠 이름과 모둠원이 여기에 표시되고 음성 제출이 열립니다.")
+            st.stop()
+        st.info(f"내 모둠 · {assigned_team['name']} — {', '.join(assigned_team['aliases'])}")
+        try:
+            team_receipt = backend.get_team_final_receipt(identity, unit_name[:200], assigned_team["name"])
+        except Exception:
+            st.error("모둠 제출 기록을 확인하지 못했습니다. 다시 시도해 주세요.")
+            st.stop()
+        if team_receipt:
+            show_final_receipt(team_receipt)
+            st.stop()
+        with st.form("final_team_simulation", clear_on_submit=False):
+            team_answer = st.text_area("토의 후 합의한 모둠 최종 답안", max_chars=5000)
+            with st.container(border=True, key="team_voice_recorder"):
+                st.subheader("모둠 음성 녹음", icon=":material/mic:")
+                recorded = st.audio_input(
+                    "마이크 버튼을 눌러 녹음 시작",
+                    help="브라우저에서 마이크 사용을 허용하세요. 녹음을 끝내면 재생해서 확인할 수 있습니다.",
+                )
+                uploaded_audio = st.file_uploader("이미 녹음한 경우 WAV 또는 MP3 첨부", type=["wav", "mp3"])
+            submit_team = st.form_submit_button(
+                "모둠 답안과 음성을 교사에게 제출", type="primary", width="stretch",
+            )
+        if submit_team:
+            audio = recorded if recorded is not None else uploaded_audio
+            if not team_answer.strip() or audio is None:
+                st.error("모둠 최종 답안을 입력하고 음성을 첨부해 주세요.")
+            else:
+                try:
+                    with st.spinner("교사 제출함에 모둠 답안과 음성을 저장하는 중입니다."):
+                        st.session_state[receipt_key] = backend.create_submission(
+                            identity,
+                            {
+                                "activity": "final_simulation",
+                                "unit_name": unit_name,
+                                "simulation_title": scenario.title,
+                                "submission_type": "팀",
+                                "reflection": team_answer,
+                            },
+                            [(audio.name, audio.type or "", audio.getvalue())],
+                        )
+                    persist_learning_now()
+                    st.rerun()
+                except ValueError as exc:
+                    st.error(str(exc))
+                except Exception:
+                    st.error("교사 제출함에 저장하지 못했습니다. 입력한 내용과 음성을 유지한 채 다시 시도해 주세요.")

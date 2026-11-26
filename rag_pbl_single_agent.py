@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import streamlit as st
-from agents import Agent, FileSearchTool, OpenAIResponsesModel, RunConfig, Runner, set_tracing_disabled
+from agents import Agent, FileSearchTool, ModelSettings, OpenAIResponsesModel, RunConfig, Runner, set_tracing_disabled
 from openai import AsyncOpenAI
 from pydantic import BaseModel, Field, field_validator
 
@@ -156,6 +156,7 @@ DISCOVERY_INSTRUCTIONS = """너는 특성화고등학교 간호학과 학생을 
 - 실제 환자 개인정보, 실제 진단·처방, 약물 용량, 침습 처치 수행 절차를 만들지 않는다.
 - 학생 업무 범위는 관찰, 사정 보조, 비침습적 안전 간호, 보고, 의사소통, 교육 모의실습으로 제한한다.
 - 근거가 확인되지 않으면 교사 검토 필요로 표시한다. 출처명·페이지·수치를 지어내지 않는다.
+- 교과서 본문, 표, 문제·정답을 재현하지 말고 확인된 학습 개념을 자기 말로 짧게 요약한다.
 - 학생 질문을 그대로 정답으로 평가하지 않는다. 별표, 해시, 이모지 장식을 쓰지 않는다.
 """
 
@@ -168,6 +169,7 @@ REVIEW_INSTRUCTIONS = """너는 특성화고등학교 간호학과 학생의 서
 - 개념 적용, 임상 추론, 근거 활용, 성찰을 각각 0~3점으로 표시한다. 총점 경쟁이나 공개 순위에는 사용하지 않는다.
 - 선택지 정답 판정이 아니라 서술의 질을 코칭한다. 빈 답이나 예시 복사는 높은 점수를 주지 않는다.
 - 실제 진단·처방·약물 용량·침습 처치 절차는 제공하지 않는다. 위험하거나 근거가 불명확하면 교사 검토 필요로 표시한다.
+- 검색 자료의 원문이나 긴 인용을 제공하지 않고 학습 개념만 자기 말로 설명한다.
 - 별표, 해시, 이모지 장식을 쓰지 않는다.
 """
 
@@ -182,6 +184,7 @@ async def _run_structured(config: RAGConfig, instructions: str, prompt: str, out
             name="RAG PBL Health Tutor",
             instructions=instructions,
             model=model,
+            model_settings=ModelSettings(store=False),
             tools=[search],
             output_type=output_type,
         )
