@@ -14,7 +14,7 @@ import re
 from dataclasses import dataclass
 
 import streamlit as st
-from agents import Agent, FileSearchTool, OpenAIResponsesModel, RunConfig, Runner, set_tracing_disabled
+from agents import Agent, FileSearchTool, ModelSettings, OpenAIResponsesModel, RunConfig, Runner, set_tracing_disabled
 from openai import AsyncOpenAI
 
 
@@ -102,6 +102,7 @@ async def _run_agents(config: AIConfig, task: str, prompt: str) -> AIResult:
             "반드시 연결된 Knowledge를 검색해 근거가 확인되는 범위에서만 답한다. "
             "학생의 답을 대신 완성하지 말고, 잘한 판단과 놓친 단서, 다음에 스스로 생각할 질문을 제시한다. "
             "출처를 지어내지 말고 근거가 부족하면 '교사 검토 필요'라고 쓴다. "
+            "교과서 본문, 표, 문제·정답을 재현하지 말고 확인된 학습 개념을 자기 말로 짧게 요약한다. "
             "실제 환자 진단이나 처방을 하지 않는다. 별표·해시·이모지 같은 장식 문자를 사용하지 않는다."
         ),
         tools=[rag],
@@ -135,6 +136,7 @@ async def _run_agents(config: AIConfig, task: str, prompt: str) -> AIResult:
             + ("안전 위험이 있으므로 review_safety도 반드시 호출한다. " if risk else "")
             + "도구 결과를 종합해 학생 눈높이의 자연스러운 한국어 피드백을 작성한다. "
             "정답을 새로 판정하거나 점수를 바꾸지 않는다. 제공된 학습 맥락과 학생 서술만 다룬다. "
+            "검색 자료의 원문이나 긴 인용을 제공하지 않는다. "
             "확인되지 않은 내용은 교사 검토 필요로 표시한다. 별표, 해시, 이모지, 과도한 제목을 쓰지 않는다."
         ),
         tools=tools,
@@ -142,7 +144,8 @@ async def _run_agents(config: AIConfig, task: str, prompt: str) -> AIResult:
 
     async with AsyncOpenAI(api_key=config.api_key) as client:
         model = OpenAIResponsesModel(model=config.model, openai_client=client)
-        turn_inquiry = inquiry.clone(model=model)
+        model_settings = ModelSettings(store=False)
+        turn_inquiry = inquiry.clone(model=model, model_settings=model_settings)
         turn_tools = [
             turn_inquiry.as_tool(
                 tool_name="review_with_knowledge",
@@ -150,14 +153,14 @@ async def _run_agents(config: AIConfig, task: str, prompt: str) -> AIResult:
             )
         ]
         if risk:
-            turn_safety = safety.clone(model=model)
+            turn_safety = safety.clone(model=model, model_settings=model_settings)
             turn_tools.append(
                 turn_safety.as_tool(
                     tool_name="review_safety",
                     tool_description="간호 모의실습의 위험 요소와 학생 업무 범위를 검토한다.",
                 )
             )
-        turn_manager = manager.clone(model=model, tools=turn_tools)
+        turn_manager = manager.clone(model=model, model_settings=model_settings, tools=turn_tools)
         result = await Runner.run(
             turn_manager,
             prompt,

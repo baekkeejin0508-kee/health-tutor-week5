@@ -170,6 +170,19 @@ def get_scenario_progress(scenario: dict) -> tuple[int, int, float]:
     return completed_missions, total, pct
 
 
+def mission_passed(mission: dict) -> bool:
+    result = st.session_state.get("hq_submissions", {}).get(mission["id"]) or {}
+    return bool(result.get("is_correct") and str(result.get("rationale") or "").strip())
+
+
+def simulation_ready(scenario: dict) -> bool:
+    missions = scenario.get("missions", [])
+    if st.session_state.get("hq_firebase_mode"):
+        return len(missions) == 3 and all(mission_passed(mission) for mission in missions)
+    completed, total, _ = get_scenario_progress(scenario)
+    return total > 0 and completed == total
+
+
 def get_step_completion_flags() -> dict:
     """상단 진도 트래커에 표시할 단계별 완료 상태 반환."""
     unit_name = st.session_state.get("hq_selected_unit", "")
@@ -389,8 +402,7 @@ def evaluate_mission_submission(mission: dict, selected_idx: int, rationale: str
     )
 
     scenario = get_current_scenario_data()
-    completed, total, _ = get_scenario_progress(scenario)
-    if completed == total and total > 0:
+    if simulation_ready(scenario):
         newly_done = award_action_once(
             action_key=f"scenario_complete:{scenario['scenario_id']}",
             action_type="기초·중급·심화 완주",
@@ -549,6 +561,11 @@ def _save_report_entry(report_entry: dict, identity_fields: tuple[str, ...]) -> 
 
 def save_individual_progress_to_teacher() -> dict | None:
     """현재 학생의 개인 질문·미션 서술을 개인 평가용 기록으로 저장하거나 갱신합니다."""
+    if st.session_state.get("hq_firebase_mode"):
+        from firebase_integration import persist_learning_now
+
+        persist_learning_now()
+        return None
     student_name = st.session_state.get("hq_student_label", "").strip()
     if not student_name:
         return None

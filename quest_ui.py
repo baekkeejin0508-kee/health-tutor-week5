@@ -25,6 +25,7 @@ from quest_engine import (
     submit_student_questions_and_get_feedback,
     submit_team_collaboration_and_get_feedback,
 )
+from student_access import record_uses_access_code
 
 
 def _md_html(raw_html: str):
@@ -927,7 +928,8 @@ def render_one_time_notifications():
     if celeb:
         if not st.session_state.get("hq_reduce_motion", False):
             st.balloons()
-        st.info("기초 · 중급 · 심화 3단계 모의실습을 완주했습니다. 이제 [STEP 03 · 팀 협력 & 교사 피드백]으로 이동하세요.")
+        if not st.session_state.get("hq_firebase_mode"):
+            st.info("기초 · 중급 · 심화 3단계 모의실습을 완주했습니다. 이제 [STEP 03 · 팀 협력 & 교사 피드백]으로 이동하세요.")
 
 
 # ==============================================================================
@@ -955,8 +957,9 @@ def render_unit_inquiry_and_scenario_selection():
 
     id_col, save_col = st.columns([2.2, 1])
     with id_col:
+        access_student = record_uses_access_code(st.session_state.get("hq_identity") or {})
         st.text_input(
-            "학번 및 이름 (개인 평가 기록용)",
+            "나의 꽃 별명" if access_student else "학번 및 이름 (개인 평가 기록용)",
             key="hq_student_label",
             placeholder="예: 2101 홍길동",
         )
@@ -1158,12 +1161,18 @@ def render_unit_inquiry_and_scenario_selection():
 # STEP 02: 기초 · 중급 · 심화 모의실습 PBL 자기주도 해결
 # ==============================================================================
 def render_mission_runner():
+    from quest_engine import mission_passed
+
     scenario = get_current_scenario_data()
     missions = scenario.get("missions", [])
+    firebase_mode = st.session_state.get("hq_firebase_mode")
     active_idx = min(st.session_state.get("hq_active_mission_idx", 0), len(missions) - 1)
+    if firebase_mode:
+        first_pending = next((i for i, item in enumerate(missions) if not mission_passed(item)), len(missions) - 1)
+        active_idx = min(active_idx, first_pending)
     mission = missions[active_idx]
     m_id = mission["id"]
-    level_tags = ["기초 모의실습", "중급 모의실습", "심화 모의실습"]
+    level_tags = ["기초 학습", "중급 학습", "심화 학습"] if firebase_mode else ["기초 모의실습", "중급 모의실습", "심화 모의실습"]
     level_label = level_tags[min(active_idx, 2)]
     clean_title = _clean_mission_title(mission.get("title", ""))
 
@@ -1178,8 +1187,10 @@ def render_mission_runner():
     with id_col:
         st.text_input(
             "학번 및 이름 (개인 평가 기록용)",
-            key="hq_student_label",
+            key="hq_student_label" if not firebase_mode else None,
+            value=st.session_state.get("hq_student_label", "") if firebase_mode else "",
             placeholder="예: 2101 홍길동",
+            disabled=bool(firebase_mode),
         )
     with save_col:
         st.write("")
@@ -1190,20 +1201,24 @@ def render_mission_runner():
                 st.error("미션을 한 개 이상 제출한 뒤 개인 기록을 저장할 수 있습니다.")
             else:
                 save_individual_progress_to_teacher()
-                st.success("현재까지의 개인 서술 기록을 선생님용 제출 관리에 저장했습니다.")
+                if st.session_state.get("hq_firebase_sync_error"):
+                    st.error("Firebase 저장에 실패했습니다. 다시 저장해 주세요.")
+                else:
+                    st.success("현재까지의 개인 서술 기록을 저장했습니다.")
 
     # 기초 -> 중급 -> 심화 상단 선택 버튼
     with st.container(key="step_palette"):
         m_cols = st.columns(len(missions), gap="small")
         for i, m_item in enumerate(missions):
             sub_i = st.session_state.get("hq_submissions", {}).get(m_item["id"])
-            done_mark = " · 완료" if sub_i else ""
+            done_mark = (" · 통과" if mission_passed(m_item) else "") if firebase_mode else (" · 완료" if sub_i else "")
             with m_cols[i]:
                 if st.button(
                     f"{level_tags[min(i, 2)]}{done_mark}",
                     key=f"step_m_{m_item['id']}",
                     type="primary" if i == active_idx else "secondary",
                     use_container_width=True,
+                    disabled=bool(firebase_mode and i > first_pending),
                 ):
                     st.session_state["hq_active_mission_idx"] = i
                     st.session_state["hq_pending_sound"] = "pop"
@@ -1276,7 +1291,11 @@ def render_mission_runner():
             with st.spinner("수업 자료와 안전 원칙을 확인해 서술 피드백을 준비하고 있습니다..."):
                 evaluate_mission_submission(mission, selected_option, rationale_input)
             save_individual_progress_to_teacher()
-            st.toast(f"{level_label} 제출이 완료되었습니다. AI 피드백을 확인하세요.")
+            if firebase_mode and mission_passed(mission):
+                next_stage = level_tags[active_idx + 1] if active_idx + 1 < len(missions) else "모의상황실습"
+                st.toast(f"{level_label}을 통과했습니다. 다음은 {next_stage}입니다.", icon=":material/check_circle:")
+            else:
+                st.toast(f"{level_label} 답안을 검토했습니다. AI 피드백을 확인하세요.")
             st.rerun()
 
     sub = st.session_state.get("hq_submissions", {}).get(m_id)
@@ -1327,6 +1346,7 @@ def render_mission_runner():
             reflection_saved = st.form_submit_button("성찰 기록 저장", use_container_width=True)
         if reflection_saved:
             save_mission_reflection(mission, reflection_text)
+            save_individual_progress_to_teacher()
             st.toast("성찰 기록을 저장했습니다.")
             st.rerun()
 
@@ -1343,13 +1363,15 @@ def render_mission_runner():
             """
         )
 
-        if active_idx < len(missions) - 1:
+        if firebase_mode and not mission_passed(mission):
+            st.warning("이 단계의 피드백을 읽고 정답과 근거를 다시 제출하면 다음 단계가 열립니다.")
+        elif active_idx < len(missions) - 1:
             next_lv = level_tags[min(active_idx + 1, 2)]
             if st.button(f"다음 미션 [{next_lv}] 도전하기 →", type="primary", use_container_width=True):
                 st.session_state["hq_active_mission_idx"] = active_idx + 1
                 st.session_state["hq_pending_sound"] = "chime"
                 st.rerun()
-        else:
+        elif not firebase_mode:
             if st.button("3단계 모두 완료 · [STEP 03 · 팀 협력 & 교사 피드백]으로 이동 →", type="primary", use_container_width=True):
                 st.session_state["hq_nav_view"] = "STEP 03 · 팀 협력 & 교사 피드백"
                 st.session_state["hq_pending_sound"] = "fanfare"
@@ -1359,14 +1381,17 @@ def render_mission_runner():
 # ==============================================================================
 # STEP 03: 팀별 협력 제출 → AI 팀 피드백 → 교사 피드백 & 제출함·인쇄
 # ==============================================================================
-def _build_printable_activity_sheet_html() -> str:
+def _build_printable_activity_sheet_html(*, team_alias: str = "") -> str:
     """인쇄 및 파일 제출용 디지털 학습지 HTML."""
     unit_name = st.session_state.get("hq_selected_unit", "")
     scenario = get_current_scenario_data()
     completed, total, pct = get_scenario_progress(scenario)
     xp = st.session_state.get("hq_xp", 0)
     student_name = st.session_state.get("hq_student_label", "")
-    group_name = st.session_state.get("hq_group_label", "")
+    alias_only = record_uses_access_code(st.session_state.get("hq_identity") or {})
+    learner_label = "개인 별명" if alias_only else "학번 / 이름"
+    team_label = "모둠 별명" if alias_only else "모둠명"
+    group_name = (team_alias or "미편성") if alias_only else st.session_state.get("hq_group_label", "")
     notes = st.session_state.get("hq_team_notes", {})
     qs = get_unit_questions_for_current()
 
@@ -1377,7 +1402,13 @@ def _build_printable_activity_sheet_html() -> str:
         sub = st.session_state.get("hq_submissions", {}).get(m["id"])
         lv = m.get("level_label", f"미션 {m.get('step_num', 1)}")
         if sub:
-            choice_str = f"{sub['selected_idx'] + 1}번. {html.escape(sub['selected_text'])}"
+            choice_index = sub.get("selected_idx")
+            options = m.get("options", [])
+            selected_text = sub.get("selected_text", "")
+            if isinstance(choice_index, int) and 0 <= choice_index < len(options):
+                choice_str = f"{choice_index + 1}번. {html.escape(selected_text or options[choice_index])}"
+            else:
+                choice_str = html.escape(selected_text or "선택 정보 없음")
             rat_str = html.escape(sub.get("rationale") or "-")
             fb_short = html.escape(sub.get("rationale_status") or "완료")
         else:
@@ -1446,8 +1477,8 @@ def _build_printable_activity_sheet_html() -> str:
         </div>
     </div>
     <div class="meta">
-        <div><strong>학번 / 이름</strong>: {html.escape(student_name or '미입력')}</div>
-        <div><strong>모둠명</strong>: {html.escape(group_name or '미입력')}</div>
+        <div><strong>{learner_label}</strong>: {html.escape(student_name or '미입력')}</div>
+        <div><strong>{team_label}</strong>: {html.escape(group_name or '미입력')}</div>
         <div><strong>학습 단원</strong>: {html.escape(unit_name)}</div>
         <div><strong>달성 진도율</strong>: {int(pct * 100)}% ({completed}/{total}단계 · {xp} XP)</div>
     </div>
@@ -1476,6 +1507,27 @@ def _build_printable_activity_sheet_html() -> str:
 
 
 def render_collaboration_and_growth():
+    if st.session_state.get("hq_firebase_mode"):
+        from firebase_integration import current_identity, get_backend
+
+        st.subheader("모의상황실습과 모둠 음성 제출")
+        st.info("기초·중급·심화 통과 후 상단 ‘모의상황실습’에서 개인 답안을 작성하세요. 이어서 모둠원들과 답안을 비교하고 함께 녹음해 제출할 수 있습니다.")
+        if st.button("내 제출 기록과 교사 피드백 보기", type="primary"):
+            st.switch_page("student_submission.py")
+        team_alias = ""
+        identity = current_identity()
+        if identity and identity.uses_access_code:
+            try:
+                team = get_backend().get_student_team(identity)
+                team_alias = team["name"] if team else ""
+            except Exception:
+                team_alias = "확인 불가"
+                st.caption("모둠 별명을 확인하지 못했습니다. 편성을 다시 조회한 뒤 학습지를 내려받으세요.")
+        st.download_button("개인 학습지 받기", _build_printable_activity_sheet_html(team_alias=team_alias),
+                           file_name="HEALTH_QUEST_개인학습지.html", mime="text/html")
+        st.caption("받은 학습지를 브라우저에서 연 뒤 ‘인쇄 / PDF 저장’을 선택하세요.")
+        return
+
     scenario = get_current_scenario_data()
     missions = scenario.get("missions", [])
     subs = st.session_state.get("hq_submissions", {})

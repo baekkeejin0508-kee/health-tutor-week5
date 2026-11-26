@@ -4,6 +4,8 @@ HEALTH QUEST — 간호 미션룸 (트렌디 에듀테크 스마트 디지털 �
 """
 import html
 import streamlit as st
+from firebase_integration import persist_learning_now
+from quest_engine import mission_passed, simulation_ready
 from quest_ai import get_ai_status
 from quest_data import SITE_CONFIG, UNIT_CATALOG
 from quest_engine import (
@@ -81,15 +83,6 @@ def _unit_display_name(unit_name: str) -> str:
 # 사이드바 (간결하고 산뜻한 구성을 적용)
 # ---------------------------------------------------------
 with st.sidebar:
-    firebase_identity = st.session_state.get("hq_identity")
-    if firebase_identity:
-        st.caption(
-            f"로그인: {firebase_identity.get('name', '')} · "
-            f"{'교사' if firebase_identity.get('role') == 'teacher' else firebase_identity.get('class_id', '학생')}"
-        )
-        if st.button("로그아웃", key="firebase_logout", use_container_width=True):
-            st.logout()
-
     _md_html(
         f"""
         <div class="hq-sidebar-brand notranslate" translate="no">
@@ -165,8 +158,10 @@ with st.sidebar:
             st.session_state["hq_pending_sound"] = "pop"
             st.rerun()
 
-    st.info("학습이 끝나면 마지막 단계에서 ‘내 제출용 Excel 받기’를 눌러 파일을 저장하고, 선생님이 안내한 제출처에 올리세요.")
-    st.caption("브라우저 창을 닫거나 서버가 다시 시작되면 작성 중인 기록이 사라질 수 있으니, 완료 후 Excel 파일을 꼭 저장하세요.")
+    if st.session_state.get("hq_firebase_mode"):
+        st.info("기초·중급·심화 개인 서술은 Firebase에 저장됩니다. 마지막 모의상황실습에서 모둠 답안과 음성 보고를 교사에게 제출하세요.")
+    else:
+        st.info("학습이 끝나면 ‘내 제출용 Excel 받기’로 파일을 저장하고, 선생님이 안내한 제출처에 올리세요.")
 
     ai_status = get_ai_status()
     if ai_status["configured"]:
@@ -187,8 +182,6 @@ with st.sidebar:
                 key="sidebar_teacher_excel_dl",
             )
             st.caption("현재는 선생님 인증이 없는 시연 기능입니다. 실제 수업 배포 전에는 교사 로그인과 Firebase 저장소 연결이 필요합니다.")
-    elif firebase_identity and firebase_identity.get("role") == "teacher":
-        st.success("교사 인증됨 · 상단의 교사 대시보드에서 제출물을 확인하세요.")
 
 # ---------------------------------------------------------
 # 상단 히어로 배너 (세련되고 간결한 구성)
@@ -212,7 +205,32 @@ _md_html(
 )
 
 # 실시간 진도율 보드
-render_progress_tracker_board()
+if not st.session_state.get("hq_firebase_mode"):
+    render_progress_tracker_board()
+
+if st.session_state.get("hq_firebase_mode"):
+    missions = get_current_scenario_data()["missions"]
+    ready = simulation_ready(get_current_scenario_data())
+    final_done = bool(st.session_state.get("hq_final_submission_id"))
+    with st.container(horizontal=True):
+        for label, color, mission in zip(("기초", "중급", "심화"), ("blue", "violet", "orange"), missions):
+            st.badge(f"{label} · {'통과' if mission_passed(mission) else '미통과'}", color=color)
+        simulation_status = "제출 완료" if final_done else "열림" if ready else "잠김"
+        st.badge(f"모의상황실습 · {simulation_status}", color="green" if ready or final_done else "gray")
+    if final_done:
+        st.success("모의상황실습 최종 제출까지 완료했습니다. 수행평가 제출 화면에서 교사 평가를 확인하세요.")
+    elif ready:
+        st.success("기초·중급·심화를 모두 통과했습니다. 이제 모의상황실습에서 개인 답안과 모둠 음성 보고를 완성하세요.")
+        if st.button("모의상황실습 시작", key="integrated_simulation_start", type="primary", width="stretch"):
+            persist_learning_now()
+            st.switch_page("app_rag_pbl.py")
+    else:
+        missing = next(label for label, mission in zip(("기초", "중급", "심화"), missions) if not mission_passed(mission))
+        st.info(f"다음 관문은 {missing}입니다. 올바른 판단을 선택하고 자신의 근거를 제출하면 다음 단계가 열립니다.")
+        if st.button(f"{missing} 학습으로 이동", key="hq_next_learning"):
+            st.session_state["hq_active_mission_idx"] = next(i for i, m in enumerate(missions) if not mission_passed(m))
+            st.session_state["hq_nav_view"] = NAV_OPTIONS[1]
+            st.rerun()
 
 # 상단 3단계 네비게이션 탭 버튼
 with st.container(key="top_nav_palette"):
@@ -244,7 +262,7 @@ elif active_view == "STEP 03 · 팀 협력 & 교사 피드백":
     render_collaboration_and_growth()
 
 
-if st.session_state.get("hq_integrated_mode", False):
+if st.session_state.get("hq_integrated_mode", False) and not st.session_state.get("hq_firebase_mode"):
     current_scenario = get_current_scenario_data()
     completed_missions, total_missions, _ = get_scenario_progress(current_scenario)
 

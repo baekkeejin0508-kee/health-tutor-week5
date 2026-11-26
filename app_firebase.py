@@ -10,4 +10,4 @@ from integrated_app_runtime import run_integrated_app
 
 # This distinct entrypoint gives Community Cloud a separate deployment while
 # both integrated apps reuse exactly the same tested runtime.
-run_integrated_app()
+run_integrated_app(firebase_required=True)
