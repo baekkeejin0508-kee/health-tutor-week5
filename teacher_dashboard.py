@@ -13,16 +13,19 @@ from openpyxl.styles import Font, PatternFill
 from evaluation_rubrics import RUBRICS, SCORE_LEVELS, rubric_for_submission, status_label
 from firebase_integration import current_identity, get_backend, load_firebase_settings
 from quest_data import UNIT_CATALOG
-from student_access import MAX_CODES_PER_CLASS, TEAM_NAMES, distribution_mark, record_uses_access_code
+from student_access import MAX_CODES_PER_CLASS, TEAM_NAMES, code_digest, distribution_mark, record_uses_access_code
 
 
-def access_codes_workbook(columns, codes):
+ACCESS_CODE_COLUMNS = ("학급", "배부 표식", "접속코드")
+
+
+def access_codes_workbook(codes):
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "학생 접속코드"
-    sheet.append(columns)
+    sheet.append(ACCESS_CODE_COLUMNS)
     for row in codes:
-        sheet.append([row[column] for column in columns])
+        sheet.append([row[column] for column in ACCESS_CODE_COLUMNS])
         for cell in sheet[sheet.max_row]:
             cell.data_type = "s"
     for cell in sheet[1]:
@@ -35,6 +38,22 @@ def access_codes_workbook(columns, codes):
     buffer = BytesIO()
     workbook.save(buffer)
     return buffer.getvalue()
+
+
+def read_access_codes_csv(data):
+    if len(data) > 65536:
+        raise ValueError("접속코드 CSV 파일 크기를 확인해 주세요.")
+    try:
+        content = data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        content = data.decode("cp949")
+    reader = csv.DictReader(StringIO(content, newline=""), strict=True)
+    if reader.fieldnames != list(ACCESS_CODE_COLUMNS):
+        raise ValueError("‘학급’, ‘배부 표식’, ‘접속코드’ 열이 있는 발급용 CSV를 선택해 주세요.")
+    rows = list(reader)
+    if not rows or any(None in row or not code_digest(row["접속코드"] or "") for row in rows):
+        raise ValueError("CSV에서 유효한 형식의 접속코드를 확인해 주세요.")
+    return rows
 
 
 st.set_page_config(page_title="HEALTH QUEST — 교사 대시보드", page_icon="📋", layout="wide")
@@ -196,6 +215,25 @@ sessions = [item for item in data["sessions"] if record_uses_access_code(item) =
 st.caption("학생 로그인 방식 · 개별 접속코드" if code_mode else "학생 로그인 방식 · Google")
 
 if code_mode:
+    with st.expander("저장한 접속코드 CSV를 엑셀로 변환"):
+        st.caption("이미 받은 접속코드 CSV를 올려 엑셀 파일로 저장하세요. 학생 코드는 그대로 사용할 수 있습니다.")
+        uploaded_codes = st.file_uploader("발급용 접속코드 CSV", type=["csv"])
+        if uploaded_codes is not None:
+            try:
+                saved_codes = read_access_codes_csv(uploaded_codes.getvalue())
+            except (UnicodeError, csv.Error):
+                st.error("CSV 파일을 읽지 못했습니다. 앱에서 다운로드한 발급용 CSV를 선택해 주세요.")
+            except ValueError as exc:
+                st.error(str(exc))
+            else:
+                st.download_button(
+                    f"기존 접속코드 {len(saved_codes)}개 엑셀(.xlsx) 다운로드",
+                    access_codes_workbook(saved_codes),
+                    file_name="HEALTH_QUEST_개별접속코드.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                    on_click="ignore",
+                )
     with st.expander("학생 접속코드 발급 및 꽃 별명 확인"):
         st.caption("학생에게는 접속코드만 전달하세요. 배부 표식은 교사가 명단과 접속코드를 대조할 때 사용합니다. 실명과 표식의 대응은 학교 내부 명부에만 기록하세요.")
         with st.form("issue_student_codes"):
@@ -275,17 +313,16 @@ if code_mode:
         if codes := st.session_state.get("issued_student_codes"):
             st.warning("접속코드 파일을 지금 저장하세요. ‘접속코드’ 열의 값만 각 학생에게 개별 전달하세요.")
             st.table(codes)
-            columns = ["학급", "배부 표식", "접속코드"]
             st.download_button(
                 f"접속코드 {len(codes)}개 엑셀(.xlsx) 다운로드",
-                access_codes_workbook(columns, codes),
+                access_codes_workbook(codes),
                 file_name="HEALTH_QUEST_개별접속코드.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
                 on_click="ignore",
             )
             buffer = StringIO()
-            writer = csv.DictWriter(buffer, fieldnames=columns)
+            writer = csv.DictWriter(buffer, fieldnames=ACCESS_CODE_COLUMNS)
             writer.writeheader()
             writer.writerows(codes)
             st.download_button(f"접속코드 {len(codes)}개 CSV 다운로드", buffer.getvalue().encode("utf-8-sig"),
