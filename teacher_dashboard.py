@@ -1,6 +1,7 @@
 """Authenticated teacher-only dashboard for Firebase classroom records."""
 
 import csv
+from datetime import datetime, timezone
 from inspect import Parameter, signature
 from io import StringIO
 from time import monotonic
@@ -22,7 +23,12 @@ if not settings.enabled or identity is None or identity.role != "teacher":
     st.stop()
 
 st.title("교사 평가 대시보드", anchor=False)
-st.caption(f"교사: {identity.name} · 두 교사가 5개 반을 공동으로 확인하는 초기 운영 모드")
+teacher_count = len(settings.teacher_emails)
+teacher_scope = f"등록된 교사 계정 {teacher_count}개" if teacher_count else "등록된 교사 계정"
+st.caption(
+    f"현재 로그인: {identity.name} · {teacher_scope}가 "
+    f"{len(settings.class_ids)}개 반의 동일한 제출함을 공동으로 확인·평가합니다."
+)
 if saved_receipt := st.session_state.pop("hq_rubric_saved", ""):
     st.session_state.pop(f"manual_status_{saved_receipt}", None)
     st.session_state.pop(f"manual_feedback_{saved_receipt}", None)
@@ -54,6 +60,15 @@ def evaluation_status_selector(item, key):
         "평가 상태", REVIEW_STATUSES, key=key, format_func=status_label,
         index=REVIEW_STATUSES.index(current) if current in REVIEW_STATUSES else 0,
     )
+
+
+def evaluator_label(item):
+    """Return a human-readable last evaluator without exposing an internal UID."""
+    name = str(item.get("teacher_name") or "").strip()
+    email = str(item.get("teacher_email") or "").strip()
+    if name and email:
+        return f"{name} ({email})"
+    return name or email
 
 
 def render_attachment(item, index, file_info, *, in_dialog=False):
@@ -96,6 +111,8 @@ def show_rubric_dialog(item):
     unit_name = item.get("unit_name") or "단원 미입력"
     st.subheader(title)
     st.text(f"{unit_name} · 제출번호 {submission_id[:8]}")
+    if evaluator := evaluator_label(item):
+        st.caption(f"마지막 평가 교사: {evaluator}")
     mission_objectives = list(dict.fromkeys(
         (mission.get("level_label", ""), mission["learning_objective"])
         for scenario in UNIT_CATALOG.get(unit_name, {}).get("scenarios", [])
@@ -187,6 +204,33 @@ if code_mode:
                 for row in roster
             ], hide_index=True)
             roster_by_uid = {row["uid"]: row for row in roster}
+            now = datetime.now(timezone.utc)
+            active_uids = [
+                row["uid"] for row in roster
+                if row["class_id"] in settings.class_ids and row["expires_at"] > now
+            ]
+            if active_uids:
+                with st.form("replace_all_student_codes"):
+                    st.subheader("전체 학생 접속코드 재발급")
+                    st.caption(
+                        f"기존 학생 {len(active_uids)}명의 새 접속코드를 CSV 한 장으로 받습니다. "
+                        "배부 표식, 별명, 학습 기록과 제출물은 유지됩니다."
+                    )
+                    confirm_all = st.checkbox("대상 학생 모두의 기존 코드가 즉시 중단됨을 확인했습니다.")
+                    replace_all = st.form_submit_button(f"{len(active_uids)}명 접속코드 재발급")
+                if replace_all and not confirm_all:
+                    st.warning("전체 학생의 기존 코드 중단을 확인해 주세요.")
+                elif replace_all:
+                    try:
+                        st.session_state["issued_student_codes"] = backend.reissue_student_access_codes(
+                            identity, active_uids,
+                        )
+                    except ValueError as exc:
+                        st.error(str(exc))
+                    except Exception:
+                        st.error("전체 코드를 재발급하지 못했습니다. Firebase 연결을 확인해 주세요.")
+                    else:
+                        st.success("새 코드가 준비됐습니다. 아래에서 CSV를 다운로드하세요.")
             with st.form("replace_student_code"):
                 selected_uid = st.selectbox(
                     "코드를 분실한 학생", list(roster_by_uid),
@@ -206,13 +250,13 @@ if code_mode:
                 except Exception:
                     st.error("코드를 재발급하지 못했습니다.")
         if codes := st.session_state.get("issued_student_codes"):
-            st.warning("방금 발급한 코드는 이 화면에만 다시 표시됩니다. 필요한 학생에게만 개별 전달하세요.")
+            st.warning("CSV를 지금 저장하세요. 파일의 ‘접속코드’ 열에 있는 값만 각 학생에게 개별 전달하세요.")
             st.table(codes)
             buffer = StringIO()
             writer = csv.DictWriter(buffer, fieldnames=["학급", "배부 표식", "접속코드"])
             writer.writeheader()
             writer.writerows(codes)
-            st.download_button("방금 발급한 코드 CSV 받기", buffer.getvalue().encode("utf-8-sig"),
+            st.download_button(f"접속코드 {len(codes)}개 CSV 다운로드", buffer.getvalue().encode("utf-8-sig"),
                                file_name="HEALTH_QUEST_개별접속코드.csv", mime="text/csv")
             if st.button("코드 표시 닫기"):
                 st.session_state.pop("issued_student_codes", None)
@@ -364,6 +408,8 @@ for item in sorted(filtered, key=lambda record: str(record.get("submitted_at", "
             f"제출 유형: {item.get('submission_type', '개인')} · "
             f"상태: {status_label(item.get('status', 'submitted'))} · 제출번호 {submission_id[:8]}"
         )
+        if evaluator := evaluator_label(item):
+            st.caption(f"마지막 평가 교사: {evaluator}")
         for index, file_info in enumerate(item.get("files", [])):
             render_attachment(item, index, file_info)
 

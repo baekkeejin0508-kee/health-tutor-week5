@@ -392,20 +392,30 @@ class FirebaseBackend:
         ]
 
     def reissue_student_access_code(self, teacher: AppIdentity, uid: str) -> dict[str, str]:
+        return self.reissue_student_access_codes(teacher, [uid])[0]
+
+    def reissue_student_access_codes(self, teacher: AppIdentity, uids: list[str]) -> list[dict[str, str]]:
         require_role(teacher, "teacher")
         if self.settings.student_login_mode != "access_code":
             raise ValueError("개별코드 방식이 꺼져 있습니다.")
-        ref = self.db.collection("student_access").document(uid)
-        code = generate_access_code()
+        if not uids or len(uids) != len(set(uids)) or len(uids) > MAX_CODES_PER_CLASS * len(self.settings.class_ids):
+            raise ValueError("재발급할 학생 목록을 확인해 주세요.")
+        collection = self.db.collection("student_access")
+        replacements = [(uid, collection.document(uid), generate_access_code()) for uid in uids]
 
         @self._firestore.transactional
         def reissue(transaction):
-            credential = ref.get(transaction=transaction).to_dict()
-            if not credential or credential["expires_at"] <= datetime.now(timezone.utc):
-                raise ValueError("만료되었거나 존재하지 않는 발급번호입니다.")
-            transaction.update(ref, {"code_hash": code_digest(code)})
-            return {"학급": credential["class_id"], "배부 표식": distribution_mark(uid),
-                    "접속코드": code}
+            now = datetime.now(timezone.utc)
+            result = []
+            for uid, ref, code in replacements:
+                credential = ref.get(transaction=transaction).to_dict()
+                if not credential or credential["expires_at"] <= now:
+                    raise ValueError("만료되었거나 존재하지 않는 발급번호입니다.")
+                result.append({"학급": credential["class_id"], "배부 표식": distribution_mark(uid),
+                               "접속코드": code})
+            for _, ref, code in replacements:
+                transaction.update(ref, {"code_hash": code_digest(code)})
+            return result
 
         return reissue(self.db.transaction())
 
@@ -724,6 +734,8 @@ class FirebaseBackend:
                 "teacher_feedback": feedback.strip()[:5000],
                 "status": status,
                 "teacher_uid": identity.uid,
+                "teacher_name": identity.name,
+                "teacher_email": identity.email,
                 "evaluated_at": self._firestore.SERVER_TIMESTAMP,
                 "updated_at": self._firestore.SERVER_TIMESTAMP,
             }
