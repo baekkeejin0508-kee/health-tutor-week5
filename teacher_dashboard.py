@@ -3,15 +3,38 @@
 import csv
 from datetime import datetime, timezone
 from inspect import Parameter, signature
-from io import StringIO
+from io import BytesIO, StringIO
 from time import monotonic
 
 import streamlit as st
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill
 
 from evaluation_rubrics import RUBRICS, SCORE_LEVELS, rubric_for_submission, status_label
 from firebase_integration import current_identity, get_backend, load_firebase_settings
 from quest_data import UNIT_CATALOG
 from student_access import MAX_CODES_PER_CLASS, TEAM_NAMES, distribution_mark, record_uses_access_code
+
+
+def access_codes_workbook(columns, codes):
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "학생 접속코드"
+    sheet.append(columns)
+    for row in codes:
+        sheet.append([row[column] for column in columns])
+        for cell in sheet[sheet.max_row]:
+            cell.data_type = "s"
+    for cell in sheet[1]:
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill("solid", fgColor="203864")
+    for column, width in zip("ABC", (12, 22, 32)):
+        sheet.column_dimensions[column].width = width
+    sheet.freeze_panes = "A2"
+    sheet.auto_filter.ref = sheet.dimensions
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
 
 
 st.set_page_config(page_title="HEALTH QUEST — 교사 대시보드", page_icon="📋", layout="wide")
@@ -174,7 +197,7 @@ st.caption("학생 로그인 방식 · 개별 접속코드" if code_mode else "�
 
 if code_mode:
     with st.expander("학생 접속코드 발급 및 꽃 별명 확인"):
-        st.caption("학생에게는 접속코드만 전달하세요. 순번과 무관한 배부 표식은 교사 화면과 배부용 CSV에서만 사용합니다. 실명과 표식의 대응은 학교 내부 명부에만 기록하세요.")
+        st.caption("학생에게는 접속코드만 전달하세요. 배부 표식은 교사가 명단과 접속코드를 대조할 때 사용합니다. 실명과 표식의 대응은 학교 내부 명부에만 기록하세요.")
         with st.form("issue_student_codes"):
             class_id = st.selectbox("발급할 학급", settings.class_ids)
             count = st.number_input("발급 수", min_value=1, max_value=MAX_CODES_PER_CLASS, value=1,
@@ -213,7 +236,7 @@ if code_mode:
                 with st.form("replace_all_student_codes"):
                     st.subheader("전체 학생 접속코드 재발급")
                     st.caption(
-                        f"기존 학생 {len(active_uids)}명의 새 접속코드를 CSV 한 장으로 받습니다. "
+                        f"기존 학생 {len(active_uids)}명의 새 접속코드를 엑셀 또는 CSV 파일로 받습니다. "
                         "배부 표식, 별명, 학습 기록과 제출물은 유지됩니다."
                     )
                     confirm_all = st.checkbox("대상 학생 모두의 기존 코드가 즉시 중단됨을 확인했습니다.")
@@ -230,7 +253,7 @@ if code_mode:
                     except Exception:
                         st.error("전체 코드를 재발급하지 못했습니다. Firebase 연결을 확인해 주세요.")
                     else:
-                        st.success("새 코드가 준비됐습니다. 아래에서 CSV를 다운로드하세요.")
+                        st.success("새 코드가 준비됐습니다. 아래에서 엑셀 또는 CSV 파일을 다운로드하세요.")
             with st.form("replace_student_code"):
                 selected_uid = st.selectbox(
                     "코드를 분실한 학생", list(roster_by_uid),
@@ -250,10 +273,19 @@ if code_mode:
                 except Exception:
                     st.error("코드를 재발급하지 못했습니다.")
         if codes := st.session_state.get("issued_student_codes"):
-            st.warning("CSV를 지금 저장하세요. 파일의 ‘접속코드’ 열에 있는 값만 각 학생에게 개별 전달하세요.")
+            st.warning("접속코드 파일을 지금 저장하세요. ‘접속코드’ 열의 값만 각 학생에게 개별 전달하세요.")
             st.table(codes)
+            columns = ["학급", "배부 표식", "접속코드"]
+            st.download_button(
+                f"접속코드 {len(codes)}개 엑셀(.xlsx) 다운로드",
+                access_codes_workbook(columns, codes),
+                file_name="HEALTH_QUEST_개별접속코드.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                on_click="ignore",
+            )
             buffer = StringIO()
-            writer = csv.DictWriter(buffer, fieldnames=["학급", "배부 표식", "접속코드"])
+            writer = csv.DictWriter(buffer, fieldnames=columns)
             writer.writeheader()
             writer.writerows(codes)
             st.download_button(f"접속코드 {len(codes)}개 CSV 다운로드", buffer.getvalue().encode("utf-8-sig"),
